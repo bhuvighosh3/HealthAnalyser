@@ -165,36 +165,64 @@ exports.chat = async (req, res) => {
             return res.json({ reply });
         }
 
-        // Step 3a: Strava → MCP tool loop
+        // Step 3a: Strava → MCP tool loop (falls back to REST API summary on MCP error)
         if (category === 'strava') {
-            const client = await getMcpClient();
-            const mcpTool = mcpToTool(client);
-            const contents = [{ role: 'user', parts: [{ text: userMessage }] }];
+            try {
+                const client = await getMcpClient();
+                const mcpTool = mcpToTool(client);
+                const contents = [{ role: 'user', parts: [{ text: userMessage }] }];
 
-            let response = await genAI.models.generateContent({
-                model: 'gemini-2.5-flash',
-                contents,
-                config: { systemInstruction: STRAVA_SYSTEM, tools: [mcpTool] }
-            });
-
-            for (let i = 0; i < 5; i++) {
-                const fns = response.functionCalls;
-                if (!fns || fns.length === 0) break;
-
-                console.log(`[Chat/strava] Tool calls (round ${i + 1}):`, fns.map(f => f.name));
-                const toolResponseParts = await mcpTool.callTool(fns);
-
-                contents.push({ role: 'model', parts: response.candidates[0].content.parts });
-                contents.push({ role: 'user', parts: toolResponseParts });
-
-                response = await genAI.models.generateContent({
+                let response = await genAI.models.generateContent({
                     model: 'gemini-2.5-flash',
                     contents,
                     config: { systemInstruction: STRAVA_SYSTEM, tools: [mcpTool] }
                 });
-            }
 
-            return res.json({ reply: response.text });
+                for (let i = 0; i < 5; i++) {
+                    const fns = response.functionCalls;
+                    if (!fns || fns.length === 0) break;
+
+                    console.log(`[Chat/strava] Tool calls (round ${i + 1}):`, fns.map(f => f.name));
+                    const toolResponseParts = await mcpTool.callTool(fns);
+
+                    contents.push({ role: 'model', parts: response.candidates[0].content.parts });
+                    contents.push({ role: 'user', parts: toolResponseParts });
+
+                    response = await genAI.models.generateContent({
+                        model: 'gemini-2.5-flash',
+                        contents,
+                        config: { systemInstruction: STRAVA_SYSTEM, tools: [mcpTool] }
+                    });
+                }
+
+                if (response.text) return res.json({ reply: response.text });
+                throw new Error('Empty MCP response');
+
+            } catch (mcpErr) {
+                // MCP failed (e.g. missing weight field in athlete profile) — fall back to REST API
+                console.warn('[Chat/strava] MCP failed, falling back to REST API:', mcpErr.message);
+                const { resetMcpClient } = require('../services/mcpService');
+                resetMcpClient();
+
+                const [athlete, activities] = await Promise.all([
+                    fetchFromStrava('/athlete'),
+                    fetchFromStrava('/athlete/activities?per_page=30'),
+                ]);
+                const summary = `Athlete: ${athlete.firstname} ${athlete.lastname}, ${athlete.city || 'unknown city'}.
+Recent ${activities.length} activities (most recent first):
+${activities.slice(0, 15).map(a =>
+    `- ${a.name} | ${a.type} | ${(a.distance/1000).toFixed(1)} km | ${Math.round(a.moving_time/60)} min | ${new Date(a.start_date).toDateString()}`
+).join('\n')}`;
+
+                const fallbackResponse = await genAI.models.generateContent({
+                    model: 'gemini-2.5-flash',
+                    contents: [{ role: 'user', parts: [{ text: userMessage }] }],
+                    config: {
+                        systemInstruction: STRAVA_SYSTEM + `\n\nHere is the athlete's current Strava data:\n${summary}\n\nAnswer using this data.`,
+                    }
+                });
+                return res.json({ reply: fallbackResponse.text });
+            }
         }
 
         // Step 3b: General fitness → Google Search grounding

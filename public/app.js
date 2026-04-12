@@ -53,6 +53,15 @@ function renderStats(stats) {
     removeSkeleton('#stat-time');
     removeSkeleton('#stat-elevation');
 
+    // Consistency + Suffer Score (computed server-side from recent activities)
+    const computed = stats.computed || {};
+    document.querySelector('#stat-consistency .stat-value').innerText =
+        computed.consistencyScore != null ? computed.consistencyScore + '%' : '—';
+    document.querySelector('#stat-intensity .stat-value').innerText =
+        computed.avgSufferScore != null ? computed.avgSufferScore : '—';
+    removeSkeleton('#stat-consistency');
+    removeSkeleton('#stat-intensity');
+
     // --- Recent Runs (4 weeks) ---
     const recentRuns = stats.recent_run_totals || { distance: 0, moving_time: 0, count: 0 };
     document.getElementById('recent-dist').innerText = `${formatDistance(recentRuns.distance)} km`;

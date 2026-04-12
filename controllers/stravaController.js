@@ -3,8 +3,9 @@ const { storeActivities, RUN_TYPES } = require('../db/database');
 
 exports.authorize = (req, res) => {
     const clientId = process.env.STRAVA_CLIENT_ID;
-    const redirectUri = `http://localhost:${process.env.PORT || 3000}/exchange_token`;
-    const authUrl = `http://www.strava.com/oauth/authorize?client_id=${clientId}&response_type=code&redirect_uri=${redirectUri}&approval_prompt=force&scope=activity:read_all,read`;
+    const host = process.env.APP_URL || `http://${req.headers.host}`;
+    const redirectUri = `${host}/exchange_token`;
+    const authUrl = `http://www.strava.com/oauth/authorize?client_id=${clientId}&response_type=code&redirect_uri=${encodeURIComponent(redirectUri)}&approval_prompt=force&scope=activity:read_all,read`;
     res.redirect(authUrl);
 };
 
@@ -54,13 +55,28 @@ exports.getAthleteStats = async (req, res) => {
             const recentActs = await fetchFromStrava(`/athlete/activities?per_page=100&after=${fourWeeksAgo}`);
             await storeActivities(recentActs);
             const runs = recentActs.filter(a => RUN_TYPES.has(a.type));
-            
+
             stats.recent_run_totals = {
                 count: runs.length,
                 distance: runs.reduce((s, a) => s + a.distance, 0),
                 moving_time: runs.reduce((s, a) => s + a.moving_time, 0),
                 elevation_gain: runs.reduce((s, a) => s + (a.total_elevation_gain || 0), 0),
             };
+
+            // Consistency: % of the 4 weeks that had at least one run
+            const runWeeks = new Set(runs.map(a => {
+                const d = new Date(a.start_date);
+                return `${d.getFullYear()}-${d.getMonth()}-W${Math.ceil(d.getDate() / 7)}`;
+            }));
+            const consistencyScore = Math.min(100, Math.round((runWeeks.size / 4) * 100));
+
+            // Avg suffer score from runs that have one
+            const sufferScores = runs.filter(r => r.suffer_score > 0).map(r => r.suffer_score);
+            const avgSufferScore = sufferScores.length
+                ? Math.round(sufferScores.reduce((s, v) => s + v, 0) / sufferScores.length)
+                : null;
+
+            stats.computed = { consistencyScore, avgSufferScore };
         } catch (e) {
             console.error('[Stats] Failed to recompute recent runs:', e.message);
         }
