@@ -5,14 +5,17 @@
   "main": "index.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
-    "start": "npx @r-huijts/strava-mcp-server"
+    "start": "node server.js",
+    "dev:py": "python3 server.py",
+    "mcp": "npx @r-huijts/strava-mcp-server"
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
   "type": "commonjs",
   "dependencies": {
-    "@anthropic-ai/sdk": "^0.88.0",
+    "@cocal/google-calendar-mcp": "^2.6.1",
+    "@google/genai": "^1.49.0",
     "@r-huijts/strava-mcp-server": "^1.2.1",
     "cors": "^2.8.6",
     "dotenv": "^17.4.1",

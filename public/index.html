@@ -4,7 +4,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Strava Health Analyser</title>
+    <title>AthleteIQ</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;800&display=swap" rel="stylesheet">
@@ -21,7 +21,7 @@
         <header class="glass-header">
             <div class="brand">
                 <i data-lucide="activity" class="brand-icon"></i>
-                <h1>Health Analyser</h1>
+                <h1>AthleteIQ</h1>
             </div>
             <div class="profile-skeleton" id="profileContainer">
                 <div class="avatar skeleton"></div>
@@ -34,7 +34,7 @@
 
         <main>
             <section class="overview">
-                <h2 class="section-title">Running Overview <span class="badge">All Time</span></h2>
+                <h2 class="section-title">Running Overview <span class="badge">Performance Metrics</span></h2>
                 <div class="stats-grid">
                     <div class="stat-card glass-panel" id="stat-activities">
                         <i data-lucide="footprints" class="stat-icon"></i>
@@ -55,6 +55,16 @@
                         <i data-lucide="mountain" class="stat-icon"></i>
                         <h3 class="stat-value skeleton-text">&nbsp;</h3>
                         <p class="stat-label">Elevation Gain (m)</p>
+                    </div>
+                    <div class="stat-card glass-panel" id="stat-consistency">
+                        <i data-lucide="calendar-check" class="stat-icon"></i>
+                        <h3 class="stat-value skeleton-text">&nbsp;</h3>
+                        <p class="stat-label">Consistency Score</p>
+                    </div>
+                    <div class="stat-card glass-panel" id="stat-intensity">
+                        <i data-lucide="flame" class="stat-icon"></i>
+                        <h3 class="stat-value skeleton-text">&nbsp;</h3>
+                        <p class="stat-label">Avg Suffer Score</p>
                     </div>
                 </div>
             </section>
@@ -97,21 +107,116 @@
 
             <!-- Analysis Section -->
             <section class="analysis-section">
-                <div class="analyse-btn-wrapper">
-                    <button id="analyseBtn" class="analyse-btn">
-                        <i data-lucide="bar-chart-3" class="analyse-btn-icon"></i>
-                        Analyse My Performance
-                    </button>
+                <div class="analysis-controls glass-panel">
+                    <h2 class="section-title">Customise Your Analysis</h2>
+
+                    <!-- Body Stats -->
+                    <p class="controls-section-label">Body Stats</p>
+                    <div class="controls-grid-4">
+                        <div class="control-group">
+                            <label for="f-age">Age</label>
+                            <input type="number" id="f-age" class="custom-input" placeholder="25" min="10" max="100">
+                        </div>
+                        <div class="control-group">
+                            <label for="f-sex">Sex</label>
+                            <select id="f-sex" class="custom-select">
+                                <option value="male">Male</option>
+                                <option value="female">Female</option>
+                            </select>
+                        </div>
+                        <div class="control-group">
+                            <label for="f-weight">Weight (kg)</label>
+                            <input type="number" id="f-weight" class="custom-input" placeholder="70" min="30" max="250" step="0.1">
+                        </div>
+                        <div class="control-group">
+                            <label for="f-height">Height (cm)</label>
+                            <input type="number" id="f-height" class="custom-input" placeholder="170" min="100" max="250">
+                        </div>
+                    </div>
+
+                    <!-- Goal & Focus -->
+                    <p class="controls-section-label">Goal & Focus</p>
+                    <div class="controls-grid">
+                        <div class="control-group">
+                            <label for="goalSelect">Goal Type</label>
+                            <select id="goalSelect" class="custom-select">
+                                <optgroup label="── Weight">
+                                    <option value="Lose weight and improve body composition">Lose Weight</option>
+                                    <option value="Gain weight and increase caloric surplus through training">Gain Weight</option>
+                                </optgroup>
+                                <optgroup label="── Muscle & Strength">
+                                    <option value="Build muscle mass and improve body composition through cross-training">Gain Muscle Mass</option>
+                                    <option value="Increase functional strength and power for running performance">Gain Strength & Power</option>
+                                </optgroup>
+                                <optgroup label="── Running">
+                                    <option value="Run a 5K">Run a 5K</option>
+                                    <option value="Run a 10K">Run a 10K</option>
+                                    <option value="Run a half marathon">Half Marathon</option>
+                                    <option value="Run a full marathon">Full Marathon</option>
+                                    <option value="Improve 5K pace">Improve 5K Pace</option>
+                                    <option value="Improve overall running endurance">Build Endurance</option>
+                                </optgroup>
+                                <optgroup label="── Fitness">
+                                    <option value="Improve cardiovascular fitness and VO2max">Improve VO2max</option>
+                                    <option value="Gain overall aerobic base and increase weekly training volume">Gain Aerobic Base</option>
+                                    <option value="General fitness and health">General Fitness</option>
+                                </optgroup>
+                            </select>
+                        </div>
+                        <div class="control-group">
+                            <label for="focusSelect">Main Focus</label>
+                            <select id="focusSelect" class="custom-select">
+                                <option value="distance">Weekly Distance</option>
+                                <option value="pace">Overall Pace</option>
+                                <option value="heartrate">Heart Rate Zones</option>
+                                <option value="elevation">Elevation Gain</option>
+                                <option value="strength">Strength & Power</option>
+                                <option value="weight">Weight Management</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <!-- Target & Timeline -->
+                    <div class="controls-grid">
+                        <div class="control-group">
+                            <label for="f-target">Specific Target <span style="opacity:.5">(optional)</span></label>
+                            <input type="text" id="f-target" class="custom-input" placeholder="e.g. Sub-25 min 5K, lose 5 kg">
+                        </div>
+                        <div class="control-group">
+                            <label for="f-duration">Timeline (weeks)</label>
+                            <input type="number" id="f-duration" class="custom-input" placeholder="12" min="2" max="52">
+                        </div>
+                    </div>
+
+                    <!-- Context -->
+                    <div class="control-group full-width">
+                        <label for="contextInput">Additional Context <span style="opacity:.5">(optional)</span></label>
+                        <input type="text" id="contextInput" class="custom-input" placeholder="e.g. Preparing for a race next month, feeling fatigued...">
+                    </div>
+
+                    <div class="analyse-btn-wrapper multi-btn">
+                        <button id="chartsBtn" class="analyse-btn secondary">
+                            <i data-lucide="bar-chart-3" class="analyse-btn-icon"></i>
+                            Instant Smart Charts
+                        </button>
+                        <button id="analyseBtn" class="analyse-btn">
+                            <i data-lucide="sparkles" class="analyse-btn-icon"></i>
+                            Analyse My Goal
+                        </button>
+                    </div>
                 </div>
 
                 <div id="analysisLoader" class="analysis-loader hidden">
                     <div class="loader-spinner"></div>
-                    <p>Crunching your data with AI...</p>
+                    <p id="analysisLoaderText">Crunching your data...</p>
                 </div>
 
-                <div id="analysisResults" class="hidden">
-                    <h2 class="section-title">AI Performance Analysis <span class="badge">Powered by Claude</span></h2>
+                <div id="analysisError" class="analysis-error hidden"><p></p></div>
 
+                <div id="analysisResults" class="hidden">
+                    <h2 class="section-title">Performance Analysis <span class="badge">Powered by Gemini</span></h2>
+
+                    <!-- Charts -->
                     <div class="charts-grid">
                         <div class="chart-card glass-panel">
                             <h3 class="chart-title">Distance Trend</h3>
@@ -129,10 +234,98 @@
                             <h3 class="chart-title">Activity Types</h3>
                             <canvas id="typesChart"></canvas>
                         </div>
+                        <div class="chart-card glass-panel">
+                            <h3 class="chart-title">Heart Rate Distribution</h3>
+                            <canvas id="hrChart"></canvas>
+                        </div>
+                        <div class="chart-card glass-panel">
+                            <h3 class="chart-title">Efficiency (km/effort)</h3>
+                            <canvas id="efficiencyChart"></canvas>
+                        </div>
                     </div>
 
-                    <h2 class="section-title insights-title">AI Insights</h2>
-                    <div id="insightsContainer" class="insights-grid"></div>
+                    <!-- Goal Forecast Results (shown after Analyse My Goal) -->
+                    <div id="forecastResultsMain" class="hidden">
+                        <h2 class="section-title" style="margin-top:1rem">Goal Forecast <span class="badge">Hypothesis + Recommendations</span></h2>
+
+                        <!-- Feasibility -->
+                        <div id="feasibilityCard" class="feasibility-card glass-panel">
+                            <div class="feasibility-top">
+                                <span id="feasibilityLabel" class="feasibility-badge"></span>
+                                <span id="feasibilityScore" class="feasibility-score"></span>
+                            </div>
+                            <div class="feasibility-bar-wrap">
+                                <div id="feasibilityBar" class="feasibility-bar"></div>
+                            </div>
+                            <p id="hypothesisSummary" class="hypothesis-summary"></p>
+                        </div>
+
+                        <!-- Current vs Required -->
+                        <div class="state-comparison">
+                            <div class="state-col">
+                                <p class="state-label">Current / Week</p>
+                                <div id="currentState" class="state-metrics"></div>
+                            </div>
+                            <div class="state-arrow"><i data-lucide="arrow-right"></i></div>
+                            <div class="state-col">
+                                <p class="state-label">Required / Week</p>
+                                <div id="requiredState" class="state-metrics"></div>
+                            </div>
+                        </div>
+
+                        <!-- Projections + Assumptions side by side on desktop -->
+                        <div class="forecast-two-col">
+                            <div id="projectionsCard" class="forecast-subsection glass-panel"></div>
+                            <div id="assumptionsCard" class="forecast-subsection glass-panel"></div>
+                        </div>
+
+                        <!-- Handoff divider -->
+                        <div class="handoff-divider">
+                            <span><i data-lucide="git-fork"></i> Handoff → Recommendation Agent</span>
+                        </div>
+
+                        <!-- Coach Note -->
+                        <div id="coachNote" class="coach-note glass-panel"></div>
+
+                        <!-- Targets + Milestones side by side -->
+                        <div class="forecast-two-col">
+                            <div id="weeklyTargets" class="forecast-subsection glass-panel"></div>
+                            <div id="milestonesCard" class="forecast-subsection glass-panel"></div>
+                        </div>
+
+                        <!-- Training Plan -->
+                        <div id="trainingPlan" class="forecast-subsection glass-panel"></div>
+
+                        <!-- Nutrition + Recovery -->
+                        <div id="nutritionTips" class="forecast-subsection glass-panel"></div>
+
+                        <!-- Calendar Scheduling -->
+                        <div id="calendarSection" class="forecast-subsection glass-panel hidden">
+                            <h3 class="forecast-sub-title"><i data-lucide="calendar-plus" style="display:inline-block;width:18px;height:18px;vertical-align:middle;margin-right:6px"></i>Schedule in Google Calendar</h3>
+                            <p class="calendar-desc">Add your workout plan to Google Calendar — the AI will find free slots and schedule each session for you.</p>
+                            <div class="controls-grid" style="margin-top:1rem">
+                                <div class="control-group">
+                                    <label for="calDurationWeeks">Weeks to schedule</label>
+                                    <input type="number" id="calDurationWeeks" class="custom-input" value="4" min="1" max="12">
+                                </div>
+                                <div class="control-group">
+                                    <label for="calStartDate">Start date <span style="opacity:.5">(optional)</span></label>
+                                    <input type="date" id="calStartDate" class="custom-input">
+                                </div>
+                            </div>
+                            <div class="analyse-btn-wrapper" style="margin-top:1rem">
+                                <button id="scheduleBtn" class="analyse-btn">
+                                    <i data-lucide="calendar-check" class="analyse-btn-icon"></i>
+                                    Schedule Workouts
+                                </button>
+                            </div>
+                            <div id="scheduleLoader" class="analysis-loader hidden" style="margin-top:1rem">
+                                <div class="loader-spinner"></div>
+                                <p>Scheduling into your calendar…</p>
+                            </div>
+                            <div id="scheduleResult" class="hidden" style="margin-top:1rem"></div>
+                        </div>
+                    </div>
                 </div>
             </section>
         </main>
@@ -159,9 +352,7 @@
     </div>
 
     <script src="app.js"></script>
-    <script>
-        lucide.createIcons();
-    </script>
+    <script>lucide.createIcons();</script>
 </body>
 
 </html>

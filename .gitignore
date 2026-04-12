@@ -1,3 +1,7 @@
 node_modules
 .env
+gcp-oauth.keys.json
+*.db
+public/strava_mcp_data.json
+scratch/
 
