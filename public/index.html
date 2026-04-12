@@ -313,6 +313,23 @@
                             </button>
                         </div>
 
+                        <!-- Nutrition RAG Agent -->
+                        <div id="nutritionSection" class="forecast-subsection glass-panel hidden">
+                            <h3 class="forecast-sub-title"><i data-lucide="salad" style="display:inline-block;width:18px;height:18px;vertical-align:middle;margin-right:6px"></i>AI Nutrition Plan <span class="badge" style="font-size:0.7rem;padding:2px 8px">RAG · Firecrawl</span></h3>
+                            <p class="calendar-desc">Get a personalised nutrition plan grounded in authoritative sports-science sources, tailored to your goal and recent training data.</p>
+                            <div class="analyse-btn-wrapper" style="margin-top:1rem">
+                                <button id="nutritionBtn" class="analyse-btn">
+                                    <i data-lucide="leaf" class="analyse-btn-icon"></i>
+                                    Generate AI Nutrition Plan
+                                </button>
+                            </div>
+                            <div id="nutritionLoader" class="analysis-loader hidden" style="margin-top:1rem">
+                                <div class="loader-spinner"></div>
+                                <p>Crawling nutrition sources &amp; generating your plan…</p>
+                            </div>
+                            <div id="nutritionResult" class="hidden" style="margin-top:1.5rem"></div>
+                        </div>
+
                         <!-- Calendar Scheduling -->
                         <div id="calendarSection" class="forecast-subsection glass-panel hidden">
                             <h3 class="forecast-sub-title"><i data-lucide="calendar-plus" style="display:inline-block;width:18px;height:18px;vertical-align:middle;margin-right:6px"></i>Schedule in Google Calendar</h3>

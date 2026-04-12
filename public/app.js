@@ -417,7 +417,8 @@ function renderCharts(charts) {
 
 
 // ── Render Results ────────────────────────────────────────────────────────────
-function renderForecastResults({ hypothesis, recommendations, edaSummary }) {
+function renderForecastResults({ hypothesis, recommendations, edaSummary, weeklySummary }) {
+    const forecastData = { hypothesis, recommendations, edaSummary, weeklySummary };
 
     // 0. EDA Summary
     if (edaSummary) {
@@ -491,6 +492,7 @@ function renderForecastResults({ hypothesis, recommendations, edaSummary }) {
     const plan = recommendations.weeklyTrainingPlan || [];
     initCalendarSection(plan);
     initDownloadButton(plan, recommendations, hypothesis);
+    initNutritionSection(forecastData.weeklySummary);
     document.getElementById('trainingPlan').innerHTML = `
         <p class="sub-title">Weekly Training Plan</p>
         ${plan.map(d => `
@@ -632,3 +634,120 @@ document.addEventListener('click', async (e) => {
         lucide.createIcons();
     }
 });
+
+// ===== AI NUTRITION PLAN (RAG + Firecrawl) =====
+let _nutritionMeta = null;
+
+function initNutritionSection(weeklySummary) {
+    _nutritionMeta = weeklySummary || {};
+    const section = document.getElementById('nutritionSection');
+    if (section) {
+        section.classList.remove('hidden');
+        lucide.createIcons();
+    }
+}
+
+document.addEventListener('click', async (e) => {
+    const btn = e.target.closest('#nutritionBtn');
+    if (!btn) return;
+
+    btn.disabled = true;
+    const ogHtml = btn.innerHTML;
+    btn.innerHTML = '<i data-lucide="loader-2" class="analyse-btn-icon spin-icon"></i> Generating…';
+    lucide.createIcons();
+
+    const loader = document.getElementById('nutritionLoader');
+    const result = document.getElementById('nutritionResult');
+    loader.classList.remove('hidden');
+    result.classList.add('hidden');
+
+    try {
+        const age          = parseInt(document.getElementById('f-age')?.value)      || 25;
+        const sex          = document.getElementById('f-sex')?.value                || 'male';
+        const weight       = parseFloat(document.getElementById('f-weight')?.value) || 70;
+        const height       = parseFloat(document.getElementById('f-height')?.value) || 170;
+        const goal         = document.getElementById('goalSelect')?.value           || 'General Fitness';
+        const durationWeeks = parseInt(document.getElementById('f-duration')?.value) || 8;
+
+        const body = {
+            goal, age, sex, weight, height, durationWeeks,
+            weeklyDistKm:  _nutritionMeta?.weeklyDistKm  ?? null,
+            weeklyHours:   _nutritionMeta?.weeklyHours   ?? null,
+            weeklyKcal:    _nutritionMeta?.weeklyKcal    ?? null,
+        };
+
+        const res = await fetch('/api/nutrition', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(body)
+        });
+        const data = await res.json();
+
+        loader.classList.add('hidden');
+        result.classList.remove('hidden');
+
+        if (data.error) {
+            result.innerHTML = `<div class="analysis-error"><p>${data.error}</p></div>`;
+        } else {
+            const plan = data.plan;
+            const ragBadge = data.ragUsed
+                ? `<span class="badge" style="font-size:.7rem;padding:2px 8px;margin-left:.5rem">Grounded via Firecrawl</span>`
+                : `<span class="badge" style="font-size:.7rem;padding:2px 8px;margin-left:.5rem;opacity:.6">Model Knowledge</span>`;
+
+            // Render prose plan or structured JSON
+            if (plan.prose) {
+                result.innerHTML = `
+                    <p class="sub-title">Your Nutrition Plan ${ragBadge}</p>
+                    <div class="coach-note glass-panel" style="white-space:pre-wrap;line-height:1.7">${escapeHtml(plan.prose)}</div>`;
+            } else {
+                result.innerHTML = `<p class="sub-title">Your Nutrition Plan ${ragBadge}</p>` + renderNutritionPlan(plan);
+            }
+        }
+    } catch (err) {
+        loader.classList.add('hidden');
+        result.classList.remove('hidden');
+        result.innerHTML = `<div class="analysis-error"><p>Failed: ${err.message}</p></div>`;
+    } finally {
+        btn.disabled = false;
+        btn.innerHTML = ogHtml;
+        lucide.createIcons();
+    }
+});
+
+function escapeHtml(str) {
+    return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+function renderNutritionPlan(plan) {
+    let html = '';
+    if (plan.dailyCalories || plan.macros) {
+        html += `<div class="forecast-subsection glass-panel" style="margin-top:1rem">
+            <p class="sub-title">Daily Targets</p>
+            ${plan.dailyCalories ? `<div class="sub-item"><strong>Calories:</strong> ${plan.dailyCalories} kcal/day</div>` : ''}
+            ${plan.macros ? Object.entries(plan.macros).map(([k,v]) => `<div class="sub-item"><strong>${k}:</strong> ${v}</div>`).join('') : ''}
+        </div>`;
+    }
+    if (plan.mealTiming && plan.mealTiming.length) {
+        html += `<div class="forecast-subsection glass-panel" style="margin-top:1rem">
+            <p class="sub-title">Meal Timing</p>
+            ${plan.mealTiming.map(m => `<div class="plan-day"><span class="plan-day-name">${m.time||m.meal||''}</span><span class="plan-workout">${m.detail||m.foods||''}</span></div>`).join('')}
+        </div>`;
+    }
+    if (plan.hydration) {
+        html += `<div class="forecast-subsection glass-panel" style="margin-top:1rem">
+            <p class="sub-title">Hydration</p>
+            <div class="sub-item">${typeof plan.hydration === 'string' ? plan.hydration : JSON.stringify(plan.hydration)}</div>
+        </div>`;
+    }
+    if (plan.supplements && plan.supplements.length) {
+        html += `<div class="forecast-subsection glass-panel" style="margin-top:1rem">
+            <p class="sub-title">Supplements</p>
+            ${plan.supplements.map(s => `<div class="sub-item">${typeof s === 'string' ? s : (s.name + ': ' + (s.detail||''))}</div>`).join('')}
+        </div>`;
+    }
+    // Fallback: dump remaining keys
+    if (!html) {
+        html = `<div class="coach-note glass-panel" style="white-space:pre-wrap">${escapeHtml(JSON.stringify(plan, null, 2))}</div>`;
+    }
+    return html;
+}
