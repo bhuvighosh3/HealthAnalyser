@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Strava Health Analyser</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="styles.css">
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+</head>
+
+<body>
+    <div class="blob blob-1"></div>
+    <div class="blob blob-2"></div>
+
+    <div class="container">
+        <header class="glass-header">
+            <div class="brand">
+                <i data-lucide="activity" class="brand-icon"></i>
+                <h1>Health Analyser</h1>
+            </div>
+            <div class="profile-skeleton" id="profileContainer">
+                <div class="avatar skeleton"></div>
+                <div class="profile-info">
+                    <div class="name-skeleton skeleton"></div>
+                    <div class="loc-skeleton skeleton"></div>
+                </div>
+            </div>
+        </header>
+
+        <main>
+            <section class="overview">
+                <h2 class="section-title">Running Overview <span class="badge">All Time</span></h2>
+                <div class="stats-grid">
+                    <div class="stat-card glass-panel" id="stat-activities">
+                        <i data-lucide="footprints" class="stat-icon"></i>
+                        <h3 class="stat-value skeleton-text">&nbsp;</h3>
+                        <p class="stat-label">Total Activities</p>
+                    </div>
+                    <div class="stat-card glass-panel" id="stat-distance">
+                        <i data-lucide="route" class="stat-icon"></i>
+                        <h3 class="stat-value skeleton-text">&nbsp;</h3>
+                        <p class="stat-label">Distance (km)</p>
+                    </div>
+                    <div class="stat-card glass-panel" id="stat-time">
+                        <i data-lucide="timer" class="stat-icon"></i>
+                        <h3 class="stat-value skeleton-text">&nbsp;</h3>
+                        <p class="stat-label">Moving Time (hrs)</p>
+                    </div>
+                    <div class="stat-card glass-panel" id="stat-elevation">
+                        <i data-lucide="mountain" class="stat-icon"></i>
+                        <h3 class="stat-value skeleton-text">&nbsp;</h3>
+                        <p class="stat-label">Elevation Gain (m)</p>
+                    </div>
+                </div>
+            </section>
+
+            <section class="recent">
+                <h2 class="section-title">Recent Running (Last 4 Weeks)</h2>
+                <div class="recent-grid">
+                    <div class="stat-row glass-panel">
+                        <span class="row-label">Distance</span>
+                        <span class="row-value skeleton-text" id="recent-dist">&nbsp;</span>
+                    </div>
+                    <div class="stat-row glass-panel">
+                        <span class="row-label">Moving Time</span>
+                        <span class="row-value skeleton-text" id="recent-time">&nbsp;</span>
+                    </div>
+                    <div class="stat-row glass-panel">
+                        <span class="row-label">Number of Runs</span>
+                        <span class="row-value skeleton-text" id="recent-count">&nbsp;</span>
+                    </div>
+                </div>
+            </section>
+
+            <section class="ytd">
+                <h2 class="section-title">Year to Date (YTD)</h2>
+                <div class="recent-grid">
+                    <div class="stat-row glass-panel">
+                        <span class="row-label">Distance</span>
+                        <span class="row-value skeleton-text" id="ytd-dist">&nbsp;</span>
+                    </div>
+                    <div class="stat-row glass-panel">
+                        <span class="row-label">Moving Time</span>
+                        <span class="row-value skeleton-text" id="ytd-time">&nbsp;</span>
+                    </div>
+                    <div class="stat-row glass-panel">
+                        <span class="row-label">Number of Runs</span>
+                        <span class="row-value skeleton-text" id="ytd-count">&nbsp;</span>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Analysis Section -->
+            <section class="analysis-section">
+                <div class="analyse-btn-wrapper">
+                    <button id="analyseBtn" class="analyse-btn">
+                        <i data-lucide="bar-chart-3" class="analyse-btn-icon"></i>
+                        Analyse My Performance
+                    </button>
+                </div>
+
+                <div id="analysisLoader" class="analysis-loader hidden">
+                    <div class="loader-spinner"></div>
+                    <p>Crunching your data with AI...</p>
+                </div>
+
+                <div id="analysisResults" class="hidden">
+                    <h2 class="section-title">AI Performance Analysis <span class="badge">Powered by Claude</span></h2>
+
+                    <div class="charts-grid">
+                        <div class="chart-card glass-panel">
+                            <h3 class="chart-title">Distance Trend</h3>
+                            <canvas id="distanceChart"></canvas>
+                        </div>
+                        <div class="chart-card glass-panel">
+                            <h3 class="chart-title">Pace Trend</h3>
+                            <canvas id="paceChart"></canvas>
+                        </div>
+                        <div class="chart-card glass-panel">
+                            <h3 class="chart-title">Weekly Volume</h3>
+                            <canvas id="weeklyChart"></canvas>
+                        </div>
+                        <div class="chart-card glass-panel">
+                            <h3 class="chart-title">Activity Types</h3>
+                            <canvas id="typesChart"></canvas>
+                        </div>
+                    </div>
+
+                    <h2 class="section-title insights-title">AI Insights</h2>
+                    <div id="insightsContainer" class="insights-grid"></div>
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <!-- Chat Widget -->
+    <div class="chat-widget">
+        <button id="chatToggle" class="glass-panel chat-toggle">
+            <i data-lucide="message-circle"></i>
+        </button>
+        <div id="chatBox" class="chat-box glass-panel hidden">
+            <div class="chat-header">
+                <h3>AI Assistant</h3>
+                <button id="chatClose"><i data-lucide="x"></i></button>
+            </div>
+            <div id="chatMessages" class="chat-messages">
+                <div class="message ai">Hi! I'm your integrated Strava AI. Ask me about your stats!</div>
+            </div>
+            <div class="chat-input-area">
+                <input type="text" id="chatInput" placeholder="Ask about your runs..." />
+                <button id="chatSend"><i data-lucide="send"></i></button>
+            </div>
+        </div>
+    </div>
+
+    <script src="app.js"></script>
+    <script>
+        lucide.createIcons();
+    </script>
+</body>
+
+</html>
