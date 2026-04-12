@@ -10,19 +10,25 @@ const tokens = {
 };
 
 function updateEnv(newTokens) {
-    let envContent = fs.readFileSync('.env', 'utf8');
+    // Always update in-memory tokens first (works in all environments)
     for (const [key, value] of Object.entries(newTokens)) {
-        const regex = new RegExp(`^${key}=.*`, 'm');
-        if (regex.test(envContent)) {
-            envContent = envContent.replace(regex, `${key}=${value}`);
-        } else {
-            envContent += `\n${key}=${value}`;
-        }
-        if (key === 'STRAVA_ACCESS_TOKEN') tokens.ACCESS_TOKEN = value;
+        if (key === 'STRAVA_ACCESS_TOKEN')  tokens.ACCESS_TOKEN  = value;
         if (key === 'STRAVA_REFRESH_TOKEN') tokens.REFRESH_TOKEN = value;
-        if (key === 'STRAVA_EXPIRES_AT') tokens.EXPIRES_AT = value;
+        if (key === 'STRAVA_EXPIRES_AT')    tokens.EXPIRES_AT    = value;
     }
-    fs.writeFileSync('.env', envContent);
+    // Persist to .env when running locally — silently skip in cloud environments
+    try {
+        let envContent = fs.readFileSync('.env', 'utf8');
+        for (const [key, value] of Object.entries(newTokens)) {
+            const regex = new RegExp(`^${key}=.*`, 'm');
+            envContent = regex.test(envContent)
+                ? envContent.replace(regex, `${key}=${value}`)
+                : envContent + `\n${key}=${value}`;
+        }
+        fs.writeFileSync('.env', envContent);
+    } catch (_) {
+        // Cloud Run / read-only FS — tokens already updated in memory above
+    }
 }
 
 async function ensureValidToken() {
