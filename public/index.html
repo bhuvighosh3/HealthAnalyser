@@ -251,7 +251,7 @@
                         <!-- EDA Summary -->
                         <div id="edaSummaryCard" class="forecast-subsection glass-panel hidden">
                             <p class="sub-title"><i data-lucide="bar-chart-2" style="display:inline-block;width:16px;height:16px;vertical-align:middle;margin-right:6px"></i>Exploratory Data Analysis</p>
-                            <p id="edaSummaryText" style="white-space:pre-wrap;line-height:1.7;opacity:.9"></p>
+                            <div id="edaSummaryText" class="eda-body"></div>
                         </div>
 
                         <!-- Feasibility -->
@@ -316,7 +316,10 @@
                         <!-- Nutrition RAG Agent -->
                         <div id="nutritionSection" class="forecast-subsection glass-panel hidden">
                             <h3 class="forecast-sub-title"><i data-lucide="salad" style="display:inline-block;width:18px;height:18px;vertical-align:middle;margin-right:6px"></i>AI Nutrition Plan <span class="badge" style="font-size:0.7rem;padding:2px 8px">RAG · Firecrawl</span></h3>
-                            <p class="calendar-desc">Get a personalised nutrition plan grounded in authoritative sports-science sources, tailored to your goal and recent training data.</p>
+                            <p class="calendar-desc">
+                                <strong>RAG Input:</strong> your goal, body stats &amp; recent Strava activities.<br>
+                                <strong>RAG Context:</strong> Firecrawl searches Johns Hopkins Medicine, WHO &amp; Harvard HSPH for goal-specific sports-nutrition content, structures it into topic-labelled sections, and injects it as grounding context into the AI agent.
+                            </p>
                             <div class="analyse-btn-wrapper" style="margin-top:1rem">
                                 <button id="nutritionBtn" class="analyse-btn">
                                     <i data-lucide="leaf" class="analyse-btn-icon"></i>

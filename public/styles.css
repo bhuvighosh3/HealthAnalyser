@@ -656,3 +656,53 @@ h1 {
 .target-chip .t-val { font-weight: 700; color: var(--accent); font-size: 1.05rem; }
 .target-chip .t-label { color: var(--text-muted); font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.4px; }
 
+/* ── Markdown-rendered blocks (EDA report, nutrition plan) ───────────────── */
+.eda-body h3, .nutrition-prose h3 {
+    font-size: 0.85rem;
+    font-weight: 700;
+    color: var(--accent);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin: 1rem 0 0.4rem;
+    border-bottom: 1px solid rgba(56,189,248,0.15);
+    padding-bottom: 0.25rem;
+}
+.eda-body h4, .nutrition-prose h4 {
+    font-size: 0.82rem;
+    font-weight: 700;
+    color: var(--text);
+    margin: 0.8rem 0 0.3rem;
+}
+.eda-body p, .nutrition-prose p {
+    font-size: 0.84rem;
+    color: var(--text-muted);
+    line-height: 1.65;
+    margin: 0.2rem 0;
+}
+.eda-body ul, .nutrition-prose ul,
+.eda-body ol, .nutrition-prose ol {
+    padding-left: 1.2rem;
+    margin: 0.3rem 0 0.5rem;
+}
+.eda-body li, .nutrition-prose li {
+    font-size: 0.84rem;
+    color: var(--text-muted);
+    line-height: 1.6;
+    margin-bottom: 0.2rem;
+}
+.eda-body strong, .nutrition-prose strong { color: var(--text); }
+.eda-body em, .nutrition-prose em { color: var(--accent); font-style: normal; }
+.eda-body code, .nutrition-prose code {
+    background: rgba(56,189,248,0.1);
+    border-radius: 3px;
+    padding: 0 4px;
+    font-size: 0.8rem;
+}
+.eda-body hr, .nutrition-prose hr {
+    border: none;
+    border-top: 1px solid rgba(56,189,248,0.15);
+    margin: 0.8rem 0;
+}
+.nutrition-prose { font-style: normal; }
+.nutrition-prose::before { content: none; }
+

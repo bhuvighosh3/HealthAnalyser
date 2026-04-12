@@ -420,9 +420,9 @@ function renderCharts(charts) {
 function renderForecastResults({ hypothesis, recommendations, edaSummary, weeklySummary }) {
     const forecastData = { hypothesis, recommendations, edaSummary, weeklySummary };
 
-    // 0. EDA Summary
+    // 0. EDA Summary — render markdown to HTML
     if (edaSummary) {
-        document.getElementById('edaSummaryText').textContent = edaSummary;
+        document.getElementById('edaSummaryText').innerHTML = markdownToHtml(edaSummary);
         document.getElementById('edaSummaryCard').classList.remove('hidden');
     }
 
@@ -698,7 +698,7 @@ document.addEventListener('click', async (e) => {
             if (plan.prose) {
                 result.innerHTML = `
                     <p class="sub-title">Your Nutrition Plan ${ragBadge}</p>
-                    <div class="coach-note glass-panel" style="white-space:pre-wrap;line-height:1.7">${escapeHtml(plan.prose)}</div>`;
+                    <div class="coach-note glass-panel nutrition-prose">${markdownToHtml(plan.prose)}</div>`;
             } else {
                 result.innerHTML = `<p class="sub-title">Your Nutrition Plan ${ragBadge}</p>` + renderNutritionPlan(plan);
             }
@@ -716,6 +716,66 @@ document.addEventListener('click', async (e) => {
 
 function escapeHtml(str) {
     return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+/**
+ * Minimal markdown → HTML converter for AI-generated reports.
+ * Handles: ### headings, **bold**, *italic*, bullet lists, numbered lists, blank lines → paragraphs.
+ */
+function markdownToHtml(md) {
+    if (!md) return '';
+    const lines = md.split('\n');
+    let html = '';
+    let inList = false;
+    let listTag = '';
+
+    const closeList = () => {
+        if (inList) { html += `</${listTag}>`; inList = false; listTag = ''; }
+    };
+
+    const inlineFormat = (text) =>
+        text
+            .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+            .replace(/\*\*\*(.+?)\*\*\*/g, '<strong><em>$1</em></strong>')
+            .replace(/\*\*(.+?)\*\*/g,     '<strong>$1</strong>')
+            .replace(/\*(.+?)\*/g,          '<em>$1</em>')
+            .replace(/`(.+?)`/g,            '<code>$1</code>');
+
+    for (const raw of lines) {
+        const line = raw.trimEnd();
+
+        // Headings
+        if (/^####\s/.test(line))      { closeList(); html += `<h4>${inlineFormat(line.slice(5))}</h4>`; continue; }
+        if (/^###\s/.test(line))       { closeList(); html += `<h3>${inlineFormat(line.slice(4))}</h3>`; continue; }
+        if (/^##\s/.test(line))        { closeList(); html += `<h3>${inlineFormat(line.slice(3))}</h3>`; continue; }
+        if (/^#\s/.test(line))         { closeList(); html += `<h3>${inlineFormat(line.slice(2))}</h3>`; continue; }
+
+        // Horizontal rule
+        if (/^---+$/.test(line.trim())) { closeList(); html += '<hr>'; continue; }
+
+        // Bullet list
+        if (/^[\*\-]\s/.test(line)) {
+            if (!inList || listTag !== 'ul') { closeList(); html += '<ul>'; inList = true; listTag = 'ul'; }
+            html += `<li>${inlineFormat(line.slice(2))}</li>`;
+            continue;
+        }
+
+        // Numbered list
+        if (/^\d+\.\s/.test(line)) {
+            if (!inList || listTag !== 'ol') { closeList(); html += '<ol>'; inList = true; listTag = 'ol'; }
+            html += `<li>${inlineFormat(line.replace(/^\d+\.\s/, ''))}</li>`;
+            continue;
+        }
+
+        // Blank line
+        if (line.trim() === '') { closeList(); html += '<br>'; continue; }
+
+        // Normal paragraph line
+        closeList();
+        html += `<p>${inlineFormat(line)}</p>`;
+    }
+    closeList();
+    return html;
 }
 
 function renderNutritionPlan(plan) {
