@@ -7,20 +7,24 @@ const path = require('path');
 
 const target = path.join(__dirname, '../node_modules/@r-huijts/strava-mcp-server/dist/stravaClient.js');
 
-if (!fs.existsSync(target)) {
-    console.log('[postinstall] strava-mcp-server not found, skipping patch.');
-    process.exit(0);
+try {
+    if (!fs.existsSync(target)) {
+        console.log('[postinstall] strava-mcp-server not found, skipping patch.');
+    } else {
+        let src = fs.readFileSync(target, 'utf8');
+        const before = 'weight: z.number().nullable(),';
+        const after  = 'weight: z.number().optional().nullable(),';
+        if (src.includes(after)) {
+            console.log('[postinstall] strava-mcp-server weight patch already applied.');
+        } else if (src.includes(before)) {
+            fs.writeFileSync(target, src.replace(before, after));
+            console.log('[postinstall] ✅ strava-mcp-server weight patch applied.');
+        } else {
+            console.log('[postinstall] strava-mcp-server weight field not found — skipping.');
+        }
+    }
+} catch (e) {
+    console.log('[postinstall] Warning (non-fatal):', e.message);
 }
-
-let src = fs.readFileSync(target, 'utf8');
-const before = 'weight: z.number().nullable(),';
-const after  = 'weight: z.number().optional().nullable(),';
-
-if (src.includes(after)) {
-    console.log('[postinstall] strava-mcp-server weight patch already applied.');
-} else if (src.includes(before)) {
-    fs.writeFileSync(target, src.replace(before, after));
-    console.log('[postinstall] ✅ strava-mcp-server weight patch applied.');
-} else {
-    console.log('[postinstall] strava-mcp-server weight field not found — skipping.');
-}
+// Always exit 0 — patch is best-effort and must never block npm install
+process.exit(0);
