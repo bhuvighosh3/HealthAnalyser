@@ -1,5 +1,6 @@
-const { generateText, genAI } = require('../services/aiService');
+const { generateText } = require('../services/aiService');
 const { fetchFromStrava } = require('../services/stravaService');
+const { runAgent, FunctionTool, LlmAgent, MODEL } = require('../services/adkService');
 
 // MET values (metabolic equivalent) per activity type
 // Calories burned = MET × weight_kg × duration_hours
@@ -36,26 +37,7 @@ function estimateVO2Max(activities) {
     return Math.round(Math.max(vo2, 20));
 }
 
-// ── EDA: Statistical Analysis Tool Declaration ───────────────────────────────
-const EDA_TOOL = {
-    functionDeclarations: [{
-        name: 'compute_training_metrics',
-        description: 'Statistically analyse the athlete\'s Strava training data. Returns computed metrics for pace trends (linear regression), volume trends, consistency patterns, and training load.',
-        parameters: {
-            type: 'object',
-            properties: {
-                metric: {
-                    type: 'string',
-                    enum: ['pace_trend', 'volume_trend', 'consistency', 'training_load', 'all'],
-                    description: 'Which aspect of training data to compute statistics for.'
-                }
-            },
-            required: ['metric']
-        }
-    }]
-};
-
-// ── EDA: Tool Executor — runs deterministic statistical computations ──────────
+// ── EDA: Statistical Analysis — deterministic tool executor ──────────────────
 function computeTrainingMetrics(metric, activities) {
     const runs = activities.filter(a => RUN_TYPES.has(a.type) && a.distance > 0 && a.moving_time > 0);
     runs.sort((a, b) => new Date(a.start_date) - new Date(b.start_date));
@@ -197,7 +179,7 @@ exports.forecast = async (req, res) => {
         const weeklySummary = { weeklyKcal, weeklyDistKm, weeklyHours, weeklyActs, estimatedVO2, bmi };
 
         // ════════════════════════════════════════════════════════════════════════
-        // AGENT 1 — EDA Agent  (Exploratory Data Analysis with tool calling)
+        // AGENT 1 — EDA Agent  (ADK LlmAgent + FunctionTool)
         // ════════════════════════════════════════════════════════════════════════
         const edaSystem = `You are a sports data analyst performing Exploratory Data Analysis (EDA) on an athlete's Strava training history.
 Use the compute_training_metrics tool to statistically analyse the training data. Call it with metric='all' to get the full picture.
@@ -213,42 +195,40 @@ Goal: "${goal}" | Timeline: ${durationWeeks} weeks | Weight: ${weight} kg | Age:
 ${context ? `Context: ${context}` : ''}
 Compute all available metrics and produce a statistical EDA summary.`;
 
-        let edaContents = [{ role: 'user', parts: [{ text: edaUserMsg }] }];
-        let edaResponse = await genAI.models.generateContent({
-            model: 'gemini-2.5-flash',
-            contents: edaContents,
-            config: { systemInstruction: edaSystem, tools: [EDA_TOOL] }
+        // FunctionTool captures 'activities' from the enclosing scope
+        const edaTool = new FunctionTool({
+            name:        'compute_training_metrics',
+            description: 'Statistically analyse the athlete\'s Strava training data. Returns computed metrics for pace trends (linear regression), volume trends, consistency patterns, and training load.',
+            parameters: {
+                type: 'OBJECT',
+                properties: {
+                    metric: {
+                        type:        'STRING',
+                        enum:        ['pace_trend', 'volume_trend', 'consistency', 'training_load', 'all'],
+                        description: 'Which aspect of training data to compute statistics for.',
+                    }
+                },
+                required: ['metric'],
+            },
+            execute: async ({ metric }) => {
+                const result = computeTrainingMetrics(metric || 'all', activities);
+                console.log(`[EDA] Tool executed: metric=${metric}`);
+                return result;
+            },
         });
 
-        // EDA tool-call loop (up to 3 rounds)
-        for (let i = 0; i < 3; i++) {
-            const fns = edaResponse.functionCalls;
-            if (!fns || !fns.length) break;
+        const edaAgent = new LlmAgent({
+            name:        'eda_agent',
+            model:       MODEL,
+            instruction: edaSystem,
+            tools:       [edaTool],
+        });
 
-            console.log(`[EDA] Tool calls (round ${i + 1}):`, fns.map(f => `${f.name}(${f.args?.metric})`));
-
-            const toolParts = fns.map(fn => ({
-                functionResponse: {
-                    name: fn.name,
-                    response: { result: computeTrainingMetrics(fn.args?.metric || 'all', activities) }
-                }
-            }));
-
-            edaContents.push({ role: 'model', parts: edaResponse.candidates[0].content.parts });
-            edaContents.push({ role: 'user', parts: toolParts });
-
-            edaResponse = await genAI.models.generateContent({
-                model: 'gemini-2.5-flash',
-                contents: edaContents,
-                config: { systemInstruction: edaSystem, tools: [EDA_TOOL] }
-            });
-        }
-
-        const edaSummary = edaResponse.text || '';
+        const edaSummary = await runAgent(edaAgent, edaUserMsg);
         console.log(`[EDA] Summary ready (${edaSummary.length} chars)`);
 
         // ════════════════════════════════════════════════════════════════════════
-        // AGENT 2 — Hypothesis Check Agent
+        // AGENT 2 — Hypothesis Check Agent  (structured JSON via generateText)
         // ════════════════════════════════════════════════════════════════════════
         const hypothesisPrompt = `You are a sports science expert and fitness data analyst.
 

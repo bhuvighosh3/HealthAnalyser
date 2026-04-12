@@ -1,13 +1,13 @@
-const { mcpToTool } = require('@google/genai');
-const { genAI } = require('../services/aiService');
-const { getCalendarMcpClient, isCalendarConfigured } = require('../services/calendarMcpService');
+const path = require('path');
+const { runAgent, createStdioMcpToolset, LlmAgent, MODEL } = require('../services/adkService');
+const { isCalendarConfigured } = require('../services/calendarMcpService');
 
 // ── Config check endpoint ────────────────────────────────────────────────────
 exports.calendarStatus = (req, res) => {
     res.json({ configured: isCalendarConfigured() });
 };
 
-// ── Schedule workouts into Google Calendar ───────────────────────────────────
+// ── Schedule workouts into Google Calendar (ADK-powered) ─────────────────────
 exports.schedule = async (req, res) => {
     if (!isCalendarConfigured()) {
         return res.status(400).json({
@@ -28,9 +28,6 @@ exports.schedule = async (req, res) => {
     }
 
     try {
-        const calClient = await getCalendarMcpClient();
-        const calTool   = mcpToTool(calClient);
-
         const start = startDate ? new Date(startDate) : new Date();
         // Align to next Monday
         const dayOfWeek = start.getDay();
@@ -63,34 +60,23 @@ Steps:
 3. Create a calendar event for each workout in a free slot
 4. Return a summary listing every event created (date, time, title) and any that couldn't be scheduled`;
 
-        const contents = [{ role: 'user', parts: [{ text: userPrompt }] }];
+        const calMcpToolset = createStdioMcpToolset(
+            path.join(__dirname, '../node_modules/.bin/google-calendar-mcp'),
+            { GOOGLE_OAUTH_CREDENTIALS: process.env.GOOGLE_OAUTH_CREDENTIALS || '' }
+        );
 
-        let response = await genAI.models.generateContent({
-            model: 'gemini-2.5-flash',
-            contents,
-            config: { systemInstruction, tools: [calTool] }
+        const scheduleAgent = new LlmAgent({
+            name:        'schedule_agent',
+            model:       MODEL,
+            instruction: systemInstruction,
+            tools:       [calMcpToolset],
         });
 
-        // Agentic tool-call loop (up to 10 rounds — calendar scheduling needs many calls)
-        for (let i = 0; i < 10; i++) {
-            const fns = response.functionCalls;
-            if (!fns || fns.length === 0) break;
-
-            console.log(`[Schedule] Calendar tool calls (round ${i + 1}):`, fns.map(f => f.name));
-            const toolResponseParts = await calTool.callTool(fns);
-
-            contents.push({ role: 'model', parts: response.candidates[0].content.parts });
-            contents.push({ role: 'user', parts: toolResponseParts });
-
-            response = await genAI.models.generateContent({
-                model: 'gemini-2.5-flash',
-                contents,
-                config: { systemInstruction, tools: [calTool] }
-            });
-        }
+        console.log('[Schedule] Starting ADK calendar scheduling agent');
+        const summary = await runAgent(scheduleAgent, userPrompt, [calMcpToolset]);
 
         console.log('[Schedule] Calendar scheduling complete');
-        res.json({ summary: response.text });
+        res.json({ summary });
 
     } catch (err) {
         console.error('[Schedule Error]', err.message);

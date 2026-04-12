@@ -1,7 +1,7 @@
-const { mcpToTool } = require('@google/genai');
-const { generateText, genAI } = require('../services/aiService');
-const { fetchFromStrava } = require('../services/stravaService');
-const { getMcpClient } = require('../services/mcpService');
+const path = require('path');
+const { generateText } = require('../services/aiService');
+const { fetchFromStrava, tokens, ensureValidToken } = require('../services/stravaService');
+const { runAgent, createStdioMcpToolset, LlmAgent, GOOGLE_SEARCH, MODEL } = require('../services/adkService');
 
 // ─── System prompts ──────────────────────────────────────────────────────────
 
@@ -145,14 +145,14 @@ Analyze this data and return ONLY a valid JSON object (no markdown, no code fenc
 };
 
 
-// ─── Chat endpoint ────────────────────────────────────────────────────────────
+// ─── Chat endpoint (ADK-powered) ──────────────────────────────────────────────
 
 exports.chat = async (req, res) => {
     const userMessage = req.body.message;
     if (!userMessage) return res.status(400).json({ error: "Missing message" });
 
     try {
-        // Step 1: Classify intent
+        // Step 1: Classify intent (simple text call — no tools needed)
         const category = (await generateText(
             [{ role: 'user', parts: [{ text: ROUTER_SYSTEM + '\n\nUser: "' + userMessage + '"' }] }]
         )).trim().toLowerCase().replace(/[^a-z-]/g, '');
@@ -165,9 +165,9 @@ exports.chat = async (req, res) => {
             return res.json({ reply });
         }
 
-        // Step 3a: Strava — always pre-fetch live data as context, MCP adds additional tool calls
+        // Step 3a: Strava — ADK LlmAgent with MCPToolset + pre-fetched REST context
         if (category === 'strava') {
-            // Always fetch fresh data first — guarantees correct answers even if MCP is unavailable
+            // Always pre-fetch via REST — guarantees correct answers even if MCP unavailable
             const [athlete, activities] = await Promise.all([
                 fetchFromStrava('/athlete'),
                 fetchFromStrava('/athlete/activities?per_page=30'),
@@ -185,59 +185,61 @@ ${activities.slice(0, 20).map(a =>
             const systemWithContext = STRAVA_SYSTEM +
                 `\n\n## LIVE STRAVA DATA (fetched now)\n${stravaContext}\n\nUse this data to answer directly. You may also call MCP tools for more specific queries.`;
 
-            // Attempt MCP for additional live tool calls — best-effort
-            let mcpTool = null;
+            // Build MCP toolset — best-effort, falls back to REST context if unavailable
+            let stravaMcpToolset = null;
             try {
-                const client = await getMcpClient();
-                mcpTool = mcpToTool(client);
+                await ensureValidToken();
+                stravaMcpToolset = createStdioMcpToolset(
+                    path.join(__dirname, '../node_modules/.bin/strava-mcp-server'),
+                    {
+                        STRAVA_ACCESS_TOKEN:  tokens.ACCESS_TOKEN  || '',
+                        STRAVA_REFRESH_TOKEN: tokens.REFRESH_TOKEN || '',
+                        STRAVA_CLIENT_ID:     tokens.CLIENT_ID     || '',
+                        STRAVA_CLIENT_SECRET: tokens.CLIENT_SECRET || '',
+                    }
+                );
             } catch (e) {
-                console.warn('[Chat/strava] MCP unavailable, using REST context only:', e.message);
+                console.warn('[Chat/strava] MCP toolset unavailable, using REST context only:', e.message);
             }
 
-            const contents = [{ role: 'user', parts: [{ text: userMessage }] }];
-            const config = {
-                systemInstruction: systemWithContext,
-                ...(mcpTool && { tools: [mcpTool] })
-            };
-
-            let response = await genAI.models.generateContent({
-                model: 'gemini-2.5-flash', contents, config
+            const stravaAgent = new LlmAgent({
+                name:        'strava_chat',
+                model:       MODEL,
+                instruction: systemWithContext,
+                tools:       stravaMcpToolset ? [stravaMcpToolset] : [],
             });
 
-            // MCP tool-call loop if tools available
-            if (mcpTool) {
-                for (let i = 0; i < 5; i++) {
-                    const fns = response.functionCalls;
-                    if (!fns || fns.length === 0) break;
-                    console.log(`[Chat/strava] MCP calls (round ${i + 1}):`, fns.map(f => f.name));
-                    try {
-                        const toolResponseParts = await mcpTool.callTool(fns);
-                        contents.push({ role: 'model', parts: response.candidates[0].content.parts });
-                        contents.push({ role: 'user', parts: toolResponseParts });
-                        response = await genAI.models.generateContent({
-                            model: 'gemini-2.5-flash', contents, config
-                        });
-                    } catch (toolErr) {
-                        console.warn('[Chat/strava] MCP tool call failed:', toolErr.message);
-                        break;
-                    }
-                }
+            try {
+                const reply = await runAgent(
+                    stravaAgent,
+                    userMessage,
+                    stravaMcpToolset ? [stravaMcpToolset] : []
+                );
+                return res.json({ reply });
+            } catch (agentErr) {
+                // If ADK agent fails (e.g. MCP subprocess error), retry without MCP tools
+                console.warn('[Chat/strava] ADK agent failed, retrying without MCP:', agentErr.message);
+                const fallbackAgent = new LlmAgent({
+                    name:        'strava_chat_fallback',
+                    model:       MODEL,
+                    instruction: systemWithContext,
+                    tools:       [],
+                });
+                const reply = await runAgent(fallbackAgent, userMessage);
+                return res.json({ reply });
             }
-
-            return res.json({ reply: response.text });
         }
 
-        // Step 3b: General fitness → Google Search grounding
-        const response = await genAI.models.generateContent({
-            model: 'gemini-2.5-flash',
-            contents: [{ role: 'user', parts: [{ text: userMessage }] }],
-            config: {
-                systemInstruction: FITNESS_SYSTEM,
-                tools: [{ googleSearch: {} }],
-            }
+        // Step 3b: General fitness — ADK LlmAgent with Google Search grounding
+        const fitnessAgent = new LlmAgent({
+            name:        'fitness_chat',
+            model:       MODEL,
+            instruction: FITNESS_SYSTEM,
+            tools:       [GOOGLE_SEARCH],
         });
 
-        return res.json({ reply: response.text });
+        const reply = await runAgent(fitnessAgent, userMessage);
+        return res.json({ reply });
 
     } catch (error) {
         console.error("CHAT ERROR:", error.message);
