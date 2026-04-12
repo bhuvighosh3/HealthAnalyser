@@ -1,6 +1,6 @@
 # AthleteIQ
 
-> AI-powered Strava health analyser — collects real training data, performs statistical EDA, hypothesises goal feasibility, and delivers personalised plans. Powered by Gemini 2.5 Flash + Google Calendar MCP.
+> AI-powered Strava health analyser — collects real training data, performs statistical EDA, hypothesises goal feasibility, delivers personalised plans, and generates RAG-grounded nutrition guidance. Powered by Google ADK (Gemini 2.5 Flash + Vertex AI).
 
 **Live:** https://athleteiq-290375529887.us-central1.run.app
 
@@ -21,7 +21,7 @@ Data is real, live, and non-trivial (full athlete training history). It is also 
 ### Step 2: Explore and Analyse (EDA)
 **File:** `controllers/forecastController.js` — **EDA Agent** section, `computeTrainingMetrics()` function
 
-A dedicated **EDA Agent** (Gemini 2.5 Flash) calls the `compute_training_metrics` tool which executes deterministic statistical computations over the collected Strava data:
+A dedicated **EDA Agent** (`LlmAgent` via Google ADK) calls the `compute_training_metrics` `FunctionTool` which executes deterministic statistical computations over the collected Strava data:
 
 | Metric | What it computes |
 |---|---|
@@ -30,7 +30,7 @@ A dedicated **EDA Agent** (Gemini 2.5 Flash) calls the `compute_training_metrics
 | `consistency` | Weeks active in last 4, avg days between runs, longest gap, consistency % |
 | `training_load` | Avg session duration, avg run distance, avg HR, avg suffer score |
 
-Gemini calls the tool with `metric='all'`, receives the computed JSON, and writes a natural-language EDA report citing the specific numbers. This EDA summary is passed as grounded context to the Hypothesis Agent.
+The ADK agent calls the tool with `metric='all'`, receives the computed JSON, and writes a natural-language EDA report citing the specific numbers. This EDA summary is passed as grounded context to the Hypothesis Agent.
 
 ### Step 3: Hypothesize
 **File:** `controllers/forecastController.js` — **Hypothesis Check Agent** section
@@ -53,22 +53,24 @@ graph TD
     Browser["Browser (AthleteIQ UI)"]
     Server["Express Server (Node.js)"]
     StravaAPI["Strava REST API"]
-    StravaMCP["Strava MCP Server\n(subprocess)"]
+    StravaMCP["Strava MCP Server\n(ADK MCPToolset)"]
     GeminiAI["Gemini 2.5 Flash\n(Vertex AI)"]
-    CalMCP["Google Calendar MCP Server\n(subprocess)"]
+    CalMCP["Google Calendar MCP\n(ADK MCPToolset)"]
     CalAPI["Google Calendar API"]
     SQLite["SQLite DB\n(health_data.db)"]
+    Firecrawl["Firecrawl Search API\n(nutrition RAG)"]
 
     Browser -->|REST /api/*| Server
     Server -->|Token refresh| StravaAPI
-    Server -->|MCP tool calls| StravaMCP
+    Server -->|ADK LlmAgent + MCPToolset| StravaMCP
     StravaMCP -->|OAuth Bearer| StravaAPI
-    Server -->|generateContent| GeminiAI
-    GeminiAI -->|compute_training_metrics tool| Server
-    GeminiAI -->|function calls| StravaMCP
-    GeminiAI -->|function calls| CalMCP
+    Server -->|ADK LlmAgent + GOOGLE_SEARCH| GeminiAI
+    Server -->|ADK FunctionTool| GeminiAI
+    Server -->|ADK LlmAgent + MCPToolset| CalMCP
     CalMCP -->|OAuth2| CalAPI
     Server -->|read/write| SQLite
+    Server -->|search + scrape| Firecrawl
+    Firecrawl -->|topic-labelled context| Server
 ```
 
 ---
@@ -79,8 +81,8 @@ graph TD
 flowchart TD
     COLLECT([Step 1: Collect\nStrava REST API\n50 activities + stats]) --> EDA
 
-    EDA{EDA Agent\nGemini 2.5 Flash}
-    EDA -->|calls compute_training_metrics tool| TOOL[Statistical Computation\npace_trend · volume_trend\nconsistency · training_load]
+    EDA{EDA Agent\nADK LlmAgent\nGemini 2.5 Flash}
+    EDA -->|ADK FunctionTool call| TOOL[Statistical Computation\npace_trend · volume_trend\nconsistency · training_load]
     TOOL -->|computed JSON| EDA
     EDA -->|EDA summary text| HYP
 
@@ -88,7 +90,12 @@ flowchart TD
     HYP -->|structured JSON handoff| REC
 
     REC{Recommendation Agent\nGemini 2.5 Flash}
-    REC --> OUT[Training plan · Nutrition\nMilestones · Calendar scheduling]
+    REC --> OUT[Training plan · Nutrition tips\nMilestones · Calendar scheduling]
+
+    NUT{Nutrition RAG Agent\nADK LlmAgent}
+    Firecrawl[Firecrawl Search\nHopkins/WHO/Harvard] -->|topic-labelled sections| NUT
+    OUT -->|user presses button| NUT
+    NUT --> NUTOUT[Personalised nutrition plan\ngrounded in crawled sources]
 ```
 
 ---
@@ -99,20 +106,21 @@ flowchart TD
 | Concept | Status | Location |
 |---|---|---|
 | Frontend | ✅ | `public/index.html`, `public/app.js` |
-| Agent framework | ✅ | `@google/genai` v1.49 with agentic tool-call loops |
-| Tool calling | ✅ | `compute_training_metrics` (EDA), Strava MCP, Calendar MCP |
+| Agent framework | ✅ | **Google ADK** (`@google/adk`) — `LlmAgent`, `FunctionTool`, `MCPToolset`, `GOOGLE_SEARCH` |
+| Tool calling | ✅ | `compute_training_metrics` FunctionTool (EDA), Strava MCPToolset, Calendar MCPToolset |
 | Non-trivial dataset | ✅ | Strava activities API — real training history, fetched at runtime |
-| Multi-agent pattern | ✅ | EDA → Hypothesis → Recommendation (3-agent handoff) |
+| Multi-agent pattern | ✅ | EDA → Hypothesis → Recommendation (3-agent handoff) + Nutrition RAG Agent |
 | Deployed | ✅ | Google Cloud Run — https://athleteiq-290375529887.us-central1.run.app |
 | README | ✅ | This file |
 
-### Grab-Bag (≥2 required — we have 4)
+### Grab-Bag (≥2 required — we have 5)
 | Concept | Status | Location |
 |---|---|---|
 | Structured output | ✅ | Hypothesis JSON + Recommendation JSON with strict schemas |
 | Data visualization | ✅ | Chart.js — distance, pace, weekly volume, HR zones, efficiency |
-| Second data retrieval | ✅ | Google Search grounding in chat (`{ googleSearch: {} }`) |
-| Iterative refinement loop | ✅ | Chat MCP loop (5 rounds), EDA tool loop (3 rounds), Calendar loop (10 rounds) |
+| Second data retrieval | ✅ | Google Search grounding (fitness chat) + Firecrawl search (nutrition RAG) |
+| Iterative refinement loop | ✅ | ADK `runAgent` event loop; EDA FunctionTool; Calendar MCPToolset multi-round |
+| RAG | ✅ | Firecrawl searches nutrition sources → topic-labelled context → ADK Nutrition Agent |
 
 ---
 
@@ -147,12 +155,28 @@ sequenceDiagram
 ```mermaid
 flowchart LR
     MSG([User message]) --> ROUTER{Router Agent\nfew-shot classify}
-    ROUTER -->|strava| MCP[MCP Tool Loop\nLive Strava data]
-    ROUTER -->|fitness| SEARCH[Google Search\nFitness knowledge]
+    ROUTER -->|strava| MCP[ADK LlmAgent + MCPToolset\nLive Strava data + REST context]
+    ROUTER -->|fitness| SEARCH[ADK LlmAgent + GOOGLE_SEARCH\nFitness knowledge]
     ROUTER -->|off-topic| REFUSE[Instant refusal\nno AI call]
     MCP --> REPLY([Reply to user])
     SEARCH --> REPLY
     REFUSE --> REPLY
+```
+
+---
+
+## Nutrition RAG Pipeline
+
+```mermaid
+flowchart LR
+    GOAL([User goal\ne.g. Run a marathon]) --> CLASSIFY{classifyGoal\nrunning/weight_loss\ncycling/general}
+    CLASSIFY --> QUERIES[Goal-specific\nFirecrawl search queries]
+    QUERIES --> FC[Firecrawl /search\nJohns Hopkins · WHO · Harvard]
+    FC --> STRUCT[structureContent\nTopic-labelled sections\nPRE-WORKOUT · CARBS\nHYDRATION · RECOVERY...]
+    STRUCT --> CACHE[(In-memory cache\n6h TTL)]
+    CACHE --> AGENT[ADK LlmAgent\nNutrition Agent\nGemini 2.5 Flash]
+    STRAVA[Live Strava data] --> AGENT
+    AGENT --> PLAN([Personalised nutrition plan])
 ```
 
 ---
@@ -175,7 +199,8 @@ STRAVA_REFRESH_TOKEN=
 STRAVA_EXPIRES_AT=
 GCP_PROJECT_ID=your_gcp_project
 GCP_LOCATION=us-central1
-GOOGLE_OAUTH_CREDENTIALS=/absolute/path/to/gcp-oauth.keys.json  # optional
+GOOGLE_OAUTH_CREDENTIALS=/absolute/path/to/gcp-oauth.keys.json  # optional (Calendar)
+FIRECRAWL_API_KEY=fc-...                                          # for Nutrition RAG
 ```
 
 ### 3. Strava OAuth
@@ -202,37 +227,11 @@ npm start  # http://localhost:3000
 | Layer | Technology |
 |---|---|
 | Frontend | Vanilla JS, Chart.js 4, Lucide icons |
-| Backend | Node.js, Express |
-| AI | Google Gemini 2.5 Flash via Vertex AI (`@google/genai`) |
-| Strava data | Strava REST API + `strava-mcp-server` |
-| Calendar | `@cocal/google-calendar-mcp` |
-| MCP bridge | `@modelcontextprotocol/sdk` + `mcpToTool()` |
-| Database | SQLite (`sqlite3`) |
-
----
-
-## Project Structure
-
-```
-├── controllers/
-│   ├── aiController.js        # Chat with intent routing + MCP fallback
-│   ├── forecastController.js  # EDA → Hypothesis → Recommendation agents
-│   ├── scheduleController.js  # Google Calendar scheduling agent
-│   └── stravaController.js    # Strava data endpoints + computed stats
-├── services/
-│   ├── aiService.js           # Gemini client singleton
-│   ├── calendarMcpService.js  # Google Calendar MCP client
-│   ├── mcpService.js          # Strava MCP client (with weight patch)
-│   └── stravaService.js       # Token refresh + Strava REST
-├── scripts/
-│   └── postinstall.js         # Patches strava-mcp-server weight field after npm install
-├── routes/
-│   └── apiRoutes.js
-├── db/
-│   └── database.js
-├── public/
-│   ├── index.html
-│   ├── app.js
-│   └── styles.css
-└── server.js
-```
+| Backend | Node.js, Express 5 |
+| AI / Agents | **Google ADK** (`@google/adk` v0.6.1) — `LlmAgent`, `FunctionTool`, `MCPToolset`, `GOOGLE_SEARCH` |
+| Model | Gemini 2.5 Flash via Vertex AI |
+| Strava data | Strava REST API + `@r-huijts/strava-mcp-server` (ADK MCPToolset) |
+| Calendar | `@cocal/google-calendar-mcp` (ADK MCPToolset) |
+| Nutrition RAG | Firecrawl `/search` → topic-labelled context → ADK LlmAgent |
+| Database | SQLite (`sqlite3`) — activity cache |
+| Deployment | Google Cloud Run (`healthmonitor-493021`, `us-central1`) |
