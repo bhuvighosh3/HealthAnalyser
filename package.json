@@ -6,7 +6,7 @@
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
     "start": "node server.js",
-    "dev:py": "python3 server.py",
+    "postinstall": "node scripts/postinstall.js",
     "mcp": "npx @r-huijts/strava-mcp-server"
   },
   "keywords": [],

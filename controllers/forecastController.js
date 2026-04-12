@@ -1,22 +1,24 @@
-const { generateText } = require('../services/aiService');
+const { generateText, genAI } = require('../services/aiService');
 const { fetchFromStrava } = require('../services/stravaService');
 
 // MET values (metabolic equivalent) per activity type
 // Calories burned = MET × weight_kg × duration_hours
 const MET = {
-    Run:        9.8,
-    VirtualRun: 9.8,
-    TrailRun:   10.5,
-    Treadmill:  9.0,
-    Hike:       5.3,
-    Ride:       7.5,
-    VirtualRide:7.0,
-    Walk:       3.5,
-    Swim:       8.0,
-    Workout:    5.0,
+    Run:         9.8,
+    VirtualRun:  9.8,
+    TrailRun:    10.5,
+    Treadmill:   9.0,
+    Hike:        5.3,
+    Ride:        7.5,
+    VirtualRide: 7.0,
+    Walk:        3.5,
+    Swim:        8.0,
+    Workout:     5.0,
     WeightTraining: 4.0,
-    Yoga:       3.0,
+    Yoga:        3.0,
 };
+
+const RUN_TYPES = new Set(['Run', 'VirtualRun', 'TrailRun', 'Treadmill']);
 
 function estimateCalories(type, weightKg, movingTimeSec) {
     const met = MET[type] || 6.0;
@@ -26,13 +28,126 @@ function estimateCalories(type, weightKg, movingTimeSec) {
 // Estimate VO2max from recent run paces (Jack Daniels approximation)
 function estimateVO2Max(activities) {
     const runs = activities
-        .filter(a => ['Run', 'VirtualRun', 'TrailRun'].includes(a.type) && a.distance > 2000 && a.average_speed > 0)
+        .filter(a => RUN_TYPES.has(a.type) && a.distance > 2000 && a.average_speed > 0)
         .slice(0, 10);
     if (!runs.length) return null;
-    // Speed in m/min, then VO2 = -4.60 + 0.182258 * v + 0.000104 * v^2 (Cooper)
     const avgSpeedMPerMin = runs.reduce((s, r) => s + r.average_speed * 60, 0) / runs.length;
     const vo2 = -4.60 + 0.182258 * avgSpeedMPerMin + 0.000104 * (avgSpeedMPerMin ** 2);
     return Math.round(Math.max(vo2, 20));
+}
+
+// ── EDA: Statistical Analysis Tool Declaration ───────────────────────────────
+const EDA_TOOL = {
+    functionDeclarations: [{
+        name: 'compute_training_metrics',
+        description: 'Statistically analyse the athlete\'s Strava training data. Returns computed metrics for pace trends (linear regression), volume trends, consistency patterns, and training load.',
+        parameters: {
+            type: 'object',
+            properties: {
+                metric: {
+                    type: 'string',
+                    enum: ['pace_trend', 'volume_trend', 'consistency', 'training_load', 'all'],
+                    description: 'Which aspect of training data to compute statistics for.'
+                }
+            },
+            required: ['metric']
+        }
+    }]
+};
+
+// ── EDA: Tool Executor — runs deterministic statistical computations ──────────
+function computeTrainingMetrics(metric, activities) {
+    const runs = activities.filter(a => RUN_TYPES.has(a.type) && a.distance > 0 && a.moving_time > 0);
+    runs.sort((a, b) => new Date(a.start_date) - new Date(b.start_date));
+    const result = {};
+
+    if (metric === 'pace_trend' || metric === 'all') {
+        const paces = runs.map(r => (r.moving_time / 60) / (r.distance / 1000));
+        const n = paces.length;
+        if (n >= 2) {
+            const xMean = (n - 1) / 2;
+            const yMean = paces.reduce((s, p) => s + p, 0) / n;
+            const num = paces.reduce((s, p, i) => s + (i - xMean) * (p - yMean), 0);
+            const den = paces.reduce((s, _, i) => s + (i - xMean) ** 2, 0);
+            const slope = den !== 0 ? num / den : 0;
+            result.pace_trend = {
+                avg_min_per_km: parseFloat(yMean.toFixed(2)),
+                trend_per_activity_min: parseFloat(slope.toFixed(3)),
+                direction: slope < -0.01 ? 'improving (getting faster)' : slope > 0.01 ? 'regressing (slowing down)' : 'stable',
+                fastest_pace: parseFloat(Math.min(...paces).toFixed(2)),
+                slowest_pace: parseFloat(Math.max(...paces).toFixed(2)),
+                sample_size: n
+            };
+        } else {
+            result.pace_trend = { note: 'Insufficient run data', sample_size: n };
+        }
+    }
+
+    if (metric === 'volume_trend' || metric === 'all') {
+        const weeks = {};
+        activities.forEach(a => {
+            const d = new Date(a.start_date);
+            const ws = new Date(d); ws.setDate(d.getDate() - d.getDay());
+            const key = ws.toISOString().slice(0, 10);
+            weeks[key] = (weeks[key] || 0) + a.distance / 1000;
+        });
+        const weeklyVols = Object.entries(weeks).sort().map(([k, v]) => ({ week: k, km: parseFloat(v.toFixed(1)) }));
+        const vols = weeklyVols.map(w => w.km);
+        const avgVol = vols.length ? vols.reduce((s, v) => s + v, 0) / vols.length : 0;
+        const recentVol = vols.slice(-2).reduce((s, v) => s + v, 0) / Math.min(2, vols.length || 1);
+        result.volume_trend = {
+            avg_weekly_km: parseFloat(avgVol.toFixed(1)),
+            recent_weekly_km: parseFloat(recentVol.toFixed(1)),
+            peak_weekly_km: parseFloat(Math.max(...vols, 0).toFixed(1)),
+            trend: recentVol > avgVol * 1.1 ? 'increasing' : recentVol < avgVol * 0.9 ? 'decreasing' : 'stable',
+            weekly_breakdown: weeklyVols.slice(-6),
+            weeks_of_data: weeklyVols.length
+        };
+    }
+
+    if (metric === 'consistency' || metric === 'all') {
+        const fourWeeksAgo = Date.now() - 28 * 24 * 3600 * 1000;
+        const recentRuns = runs.filter(a => new Date(a.start_date) >= fourWeeksAgo);
+        const weeksWithRun = new Set(recentRuns.map(r => {
+            const d = new Date(r.start_date);
+            const ws = new Date(d); ws.setDate(d.getDate() - d.getDay());
+            return ws.toISOString().slice(0, 10);
+        }));
+        const sorted = [...recentRuns].sort((a, b) => new Date(a.start_date) - new Date(b.start_date));
+        const dayGaps = [];
+        for (let i = 1; i < sorted.length; i++) {
+            dayGaps.push(parseFloat(
+                ((new Date(sorted[i].start_date) - new Date(sorted[i - 1].start_date)) / 86400000).toFixed(1)
+            ));
+        }
+        result.consistency = {
+            runs_last_4_weeks: recentRuns.length,
+            weeks_active: weeksWithRun.size,
+            consistency_score_pct: Math.round((weeksWithRun.size / 4) * 100),
+            avg_days_between_runs: dayGaps.length ? parseFloat((dayGaps.reduce((s, v) => s + v, 0) / dayGaps.length).toFixed(1)) : null,
+            longest_gap_days: dayGaps.length ? parseFloat(Math.max(...dayGaps).toFixed(1)) : null,
+            avg_runs_per_week: parseFloat((recentRuns.length / 4).toFixed(1))
+        };
+    }
+
+    if (metric === 'training_load' || metric === 'all') {
+        const recent = [...activities].sort((a, b) => new Date(b.start_date) - new Date(a.start_date)).slice(0, 10);
+        const recentRuns = recent.filter(a => RUN_TYPES.has(a.type));
+        const avgDur = recent.length ? recent.reduce((s, a) => s + a.moving_time, 0) / recent.length : 0;
+        const avgDist = recentRuns.length ? recentRuns.reduce((s, a) => s + a.distance / 1000, 0) / recentRuns.length : 0;
+        const hrs = recent.filter(a => a.average_heartrate).map(a => a.average_heartrate);
+        const sf = recent.filter(a => a.suffer_score).map(a => a.suffer_score);
+        result.training_load = {
+            avg_session_min: Math.round(avgDur / 60),
+            avg_run_km: parseFloat(avgDist.toFixed(1)),
+            avg_heart_rate_bpm: hrs.length ? Math.round(hrs.reduce((s, v) => s + v, 0) / hrs.length) : null,
+            avg_suffer_score: sf.length ? Math.round(sf.reduce((s, v) => s + v, 0) / sf.length) : null,
+            has_heartrate_data: hrs.length > 0,
+            sample_size: recent.length
+        };
+    }
+
+    return result;
 }
 
 exports.forecast = async (req, res) => {
@@ -45,27 +160,25 @@ exports.forecast = async (req, res) => {
             goal,
             target = '',
             durationWeeks = 12,
+            context = '',
         } = req.body;
 
         if (!goal) return res.status(400).json({ error: 'Goal is required.' });
 
-        // ── Fetch Strava data ─────────────────────────────────────────────────
+        // ── Step 1: Collect — fetch Strava data ──────────────────────────────────
         const [activities, athlete] = await Promise.all([
             fetchFromStrava('/athlete/activities?per_page=50'),
             fetchFromStrava('/athlete'),
         ]);
         const stats = await fetchFromStrava(`/athletes/${athlete.id}/stats`);
 
-        // ── Enrich each activity with estimated calorie burn ──────────────────
         const enriched = activities.map(a => ({
             name:          a.name,
             type:          a.type,
             date:          a.start_date_local?.slice(0, 10),
             distanceKm:    parseFloat((a.distance / 1000).toFixed(2)),
             movingTimeMin: Math.round(a.moving_time / 60),
-            paceMinPerKm:  a.distance > 0
-                ? parseFloat(((a.moving_time / 60) / (a.distance / 1000)).toFixed(2))
-                : null,
+            paceMinPerKm:  a.distance > 0 ? parseFloat(((a.moving_time / 60) / (a.distance / 1000)).toFixed(2)) : null,
             avgSpeedKmh:   parseFloat((a.average_speed * 3.6).toFixed(1)),
             elevationM:    Math.round(a.total_elevation_gain || 0),
             avgHR:         a.average_heartrate ?? null,
@@ -73,21 +186,70 @@ exports.forecast = async (req, res) => {
             estimatedKcal: estimateCalories(a.type, weight, a.moving_time),
         }));
 
-        // Last-28-days aggregate
         const cutoff = Date.now() - 28 * 24 * 60 * 60 * 1000;
         const recent = enriched.filter(a => new Date(a.date) >= new Date(cutoff));
-        const weeklyKcal     = Math.round(recent.reduce((s, a) => s + a.estimatedKcal, 0) / 4);
-        const weeklyDistKm   = parseFloat((recent.reduce((s, a) => s + a.distanceKm, 0) / 4).toFixed(1));
-        const weeklyHours    = parseFloat((recent.reduce((s, a) => s + a.movingTimeMin, 0) / 60 / 4).toFixed(1));
-        const weeklyActs     = parseFloat((recent.length / 4).toFixed(1));
-        const estimatedVO2   = estimateVO2Max(activities);
-        const bmi            = parseFloat((weight / ((height / 100) ** 2)).toFixed(1));
-
+        const weeklyKcal   = Math.round(recent.reduce((s, a) => s + a.estimatedKcal, 0) / 4);
+        const weeklyDistKm = parseFloat((recent.reduce((s, a) => s + a.distanceKm, 0) / 4).toFixed(1));
+        const weeklyHours  = parseFloat((recent.reduce((s, a) => s + a.movingTimeMin, 0) / 60 / 4).toFixed(1));
+        const weeklyActs   = parseFloat((recent.length / 4).toFixed(1));
+        const estimatedVO2 = estimateVO2Max(activities);
+        const bmi          = parseFloat((weight / ((height / 100) ** 2)).toFixed(1));
         const weeklySummary = { weeklyKcal, weeklyDistKm, weeklyHours, weeklyActs, estimatedVO2, bmi };
 
-        // ════════════════════════════════════════════════════════════════════
-        // AGENT 1 — Hypothesis Check Agent
-        // ════════════════════════════════════════════════════════════════════
+        // ════════════════════════════════════════════════════════════════════════
+        // AGENT 1 — EDA Agent  (Exploratory Data Analysis with tool calling)
+        // ════════════════════════════════════════════════════════════════════════
+        const edaSystem = `You are a sports data analyst performing Exploratory Data Analysis (EDA) on an athlete's Strava training history.
+Use the compute_training_metrics tool to statistically analyse the training data. Call it with metric='all' to get the full picture.
+After receiving the computed metrics, write a concise EDA report identifying:
+- Key trends (pace, volume)
+- Consistency patterns and gaps
+- Training load insights
+- Anomalies or risk signals
+Be specific: cite actual numbers from the tool results.`;
+
+        const edaUserMsg = `Analyse this athlete's training data.
+Goal: "${goal}" | Timeline: ${durationWeeks} weeks | Weight: ${weight} kg | Age: ${age}
+${context ? `Context: ${context}` : ''}
+Compute all available metrics and produce a statistical EDA summary.`;
+
+        let edaContents = [{ role: 'user', parts: [{ text: edaUserMsg }] }];
+        let edaResponse = await genAI.models.generateContent({
+            model: 'gemini-2.5-flash',
+            contents: edaContents,
+            config: { systemInstruction: edaSystem, tools: [EDA_TOOL] }
+        });
+
+        // EDA tool-call loop (up to 3 rounds)
+        for (let i = 0; i < 3; i++) {
+            const fns = edaResponse.functionCalls;
+            if (!fns || !fns.length) break;
+
+            console.log(`[EDA] Tool calls (round ${i + 1}):`, fns.map(f => `${f.name}(${f.args?.metric})`));
+
+            const toolParts = fns.map(fn => ({
+                functionResponse: {
+                    name: fn.name,
+                    response: { result: computeTrainingMetrics(fn.args?.metric || 'all', activities) }
+                }
+            }));
+
+            edaContents.push({ role: 'model', parts: edaResponse.candidates[0].content.parts });
+            edaContents.push({ role: 'user', parts: toolParts });
+
+            edaResponse = await genAI.models.generateContent({
+                model: 'gemini-2.5-flash',
+                contents: edaContents,
+                config: { systemInstruction: edaSystem, tools: [EDA_TOOL] }
+            });
+        }
+
+        const edaSummary = edaResponse.text || '';
+        console.log(`[EDA] Summary ready (${edaSummary.length} chars)`);
+
+        // ════════════════════════════════════════════════════════════════════════
+        // AGENT 2 — Hypothesis Check Agent
+        // ════════════════════════════════════════════════════════════════════════
         const hypothesisPrompt = `You are a sports science expert and fitness data analyst.
 
 ## USER PROFILE
@@ -95,6 +257,9 @@ exports.forecast = async (req, res) => {
 - Fitness Goal: "${goal}"
 - Specific Target: "${target || 'not specified'}"
 - Time Available: ${durationWeeks} weeks
+
+## EDA FINDINGS (from statistical analysis agent)
+${edaSummary}
 
 ## CURRENT WEEKLY PERFORMANCE (28-day avg)
 - Calories burned: ~${weeklyKcal} kcal/week
@@ -115,7 +280,7 @@ ${JSON.stringify(enriched.slice(0, 20), null, 2)}
 - VO2max improvement: ~3–5% per 4 weeks of consistent aerobic work
 - BMR (Mifflin-St Jeor): ${sex === 'female' ? `(10×${weight})+(6.25×${height})-(5×${age})-161` : `(10×${weight})+(6.25×${height})-(5×${age})+5`}
 
-Rigorously validate whether the goal is achievable in ${durationWeeks} weeks.
+Use the EDA findings above to rigorously validate whether the goal is achievable in ${durationWeeks} weeks.
 
 Return ONLY a valid JSON object (no markdown, no code fences):
 {
@@ -150,11 +315,11 @@ Return ONLY a valid JSON object (no markdown, no code fences):
         hypText = hypText.replace(/^```json\s*/i, '').replace(/```$/i, '').trim()
                          .replace(/[\x00-\x1F\x7F-\x9F]/g, ' ');
         const hypothesis = JSON.parse(hypText);
-        console.log(`[Forecast] Hypothesis: ${hypothesis.feasibility} (${hypothesis.feasibilityScore}/100)`);
+        console.log(`[Hypothesis] ${hypothesis.feasibility} (${hypothesis.feasibilityScore}/100)`);
 
-        // ════════════════════════════════════════════════════════════════════
-        // AGENT 2 — Recommendation Agent  [HANDOFF from Hypothesis Agent]
-        // ════════════════════════════════════════════════════════════════════
+        // ════════════════════════════════════════════════════════════════════════
+        // AGENT 3 — Recommendation Agent  [HANDOFF from Hypothesis Agent]
+        // ════════════════════════════════════════════════════════════════════════
         const recommendationPrompt = `You are a world-class personal running coach and sports nutritionist.
 
 ## [HANDOFF FROM HYPOTHESIS CHECK AGENT]
@@ -208,9 +373,9 @@ Return ONLY a valid JSON object (no markdown, no code fences):
         recText = recText.replace(/^```json\s*/i, '').replace(/```$/i, '').trim()
                          .replace(/[\x00-\x1F\x7F-\x9F]/g, ' ');
         const recommendations = JSON.parse(recText);
-        console.log(`[Forecast] Recommendations ready — ${recommendations.weeklyTrainingPlan?.length} training days, ${recommendations.milestones?.length} milestones`);
+        console.log(`[Recommendations] ${recommendations.weeklyTrainingPlan?.length} training days, ${recommendations.milestones?.length} milestones`);
 
-        res.json({ hypothesis, recommendations, weeklySummary });
+        res.json({ hypothesis, recommendations, weeklySummary, edaSummary });
 
     } catch (err) {
         console.error('[Forecast Error]', err.message);

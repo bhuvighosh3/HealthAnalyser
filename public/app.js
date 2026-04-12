@@ -417,7 +417,14 @@ function renderCharts(charts) {
 
 
 // ── Render Results ────────────────────────────────────────────────────────────
-function renderForecastResults({ hypothesis, recommendations }) {
+function renderForecastResults({ hypothesis, recommendations, edaSummary }) {
+
+    // 0. EDA Summary
+    if (edaSummary) {
+        document.getElementById('edaSummaryText').textContent = edaSummary;
+        document.getElementById('edaSummaryCard').classList.remove('hidden');
+    }
+
 
     // 1. Feasibility
     const label = hypothesis.feasibility || 'unknown';
@@ -482,7 +489,8 @@ function renderForecastResults({ hypothesis, recommendations }) {
 
     // 7. Training plan
     const plan = recommendations.weeklyTrainingPlan || [];
-    initCalendarSection(plan); // show calendar button if configured
+    initCalendarSection(plan);
+    initDownloadButton(plan, recommendations, hypothesis);
     document.getElementById('trainingPlan').innerHTML = `
         <p class="sub-title">Weekly Training Plan</p>
         ${plan.map(d => `
@@ -532,6 +540,37 @@ function stateMetrics(pairs) {
 
 function truncate(str, n) {
     return str.length > n ? str.slice(0, n) + '…' : str;
+}
+
+// ── Download Training Plan as CSV ─────────────────────────────────────────────
+function initDownloadButton(plan, recommendations, hypothesis) {
+    const btn = document.getElementById('downloadPlanBtn');
+    if (!btn || !plan.length) return;
+    btn.classList.remove('hidden');
+    btn.onclick = () => {
+        const rows = [
+            ['Day', 'Workout', 'Duration', 'Intensity', 'Target HR', 'Purpose'],
+            ...plan.map(d => [d.day, d.workout, d.duration, d.intensity, d.targetHR || 'N/A', d.purpose])
+        ];
+        const milestones = (recommendations.milestones || []).map(m => `Week ${m.week}: ${m.target}`).join(' | ');
+        const targets = recommendations.weeklyTargets || {};
+        const header = [
+            `# AthleteIQ Training Plan`,
+            `Feasibility: ${hypothesis.feasibility} (${hypothesis.feasibilityScore}/100)`,
+            `Weekly Targets: ${targets.distanceKm} km | ${targets.kcal} kcal | ${targets.activeHours} hrs | Long run: ${targets.longRunKm} km`,
+            `Milestones: ${milestones}`,
+            `Coach Note: ${recommendations.coachNote || ''}`,
+            ''
+        ].join('\n');
+        const csv = header + rows.map(r => r.map(c => `"${String(c).replace(/"/g, '""')}"`).join(',')).join('\n');
+        const blob = new Blob([csv], { type: 'text/csv' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url; a.download = 'athleteiq-training-plan.csv';
+        a.click();
+        URL.revokeObjectURL(url);
+    };
+    lucide.createIcons();
 }
 
 // ===== GOOGLE CALENDAR SCHEDULING =====
