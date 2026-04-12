@@ -7,6 +7,8 @@ WORKDIR /app
 
 # Install dependencies first (layer cache)
 COPY package*.json ./
+# Copy postinstall script before npm ci so it exists when npm runs it
+COPY scripts/ ./scripts/
 RUN npm ci --omit=dev && npm rebuild sqlite3 --build-from-source
 
 # Copy source
