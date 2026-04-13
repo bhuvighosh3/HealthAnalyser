@@ -121,88 +121,143 @@ const OFF_TOPIC_REPLIES = [
 
 // ─── Build rich Strava context block ─────────────────────────────────────────
 
-async function buildStravaContext(athlete, activities, athleteStats) {
-    const now   = Date.now();
-    const msDay = 86400000;
+const WORKOUT_TYPE_LABEL = { 0: 'default', 1: 'race', 2: 'long run', 3: 'workout' };
 
-    // Week / month buckets
+async function buildStravaContext(athlete, activities, athleteStats) {
+    const now    = Date.now();
+    const msDay  = 86400000;
+
     const weekStart  = now - 7  * msDay;
     const monthStart = now - 28 * msDay;
 
-    const runs     = activities.filter(a => ['Run','VirtualRun','TrailRun','Treadmill'].includes(a.type));
-    const allActs  = activities;
+    const runs    = activities.filter(a => ['Run','VirtualRun','TrailRun','Treadmill'].includes(a.type));
+    const allActs = activities;
 
     const thisWeek  = allActs.filter(a => new Date(a.start_date) >= weekStart);
     const thisMonth = allActs.filter(a => new Date(a.start_date) >= monthStart);
 
-    const weekKm  = thisWeek.reduce((s, a) => s + a.distance, 0) / 1000;
+    const weekKm  = thisWeek.reduce((s, a)  => s + a.distance, 0) / 1000;
     const monthKm = thisMonth.reduce((s, a) => s + a.distance, 0) / 1000;
 
-    // Pace stats (runs only, min/km)
-    const paces = runs
-        .filter(a => a.distance > 1000 && a.moving_time > 0)
-        .map(a => (a.moving_time / 60) / (a.distance / 1000));
-
-    const avgPace  = paces.length ? paces.reduce((s, p) => s + p, 0) / paces.length : null;
-    const bestPace = paces.length ? Math.min(...paces) : null;
-
     const fmt = (minPerKm) => {
-        if (!minPerKm) return 'N/A';
+        if (!minPerKm || !isFinite(minPerKm)) return 'N/A';
         const m = Math.floor(minPerKm);
         const s = Math.round((minPerKm - m) * 60);
         return `${m}:${String(s).padStart(2, '0')} min/km`;
     };
+    const fmtDuration = (secs) => {
+        const h = Math.floor(secs / 3600);
+        const m = Math.floor((secs % 3600) / 60);
+        return h > 0 ? `${h}h ${m}m` : `${m} min`;
+    };
 
-    // Heart rate stats
-    const hrData = allActs.filter(a => a.average_heartrate).map(a => a.average_heartrate);
-    const avgHR  = hrData.length ? Math.round(hrData.reduce((s, v) => s + v, 0) / hrData.length) : null;
-    const maxHR  = hrData.length ? Math.round(Math.max(...hrData)) : null;
+    // ── Pace stats ──────────────────────────────────────────────────────────
+    const paces = runs
+        .filter(a => a.distance > 1000 && a.moving_time > 0)
+        .map(a => (a.moving_time / 60) / (a.distance / 1000));
+    const avgPace  = paces.length ? paces.reduce((s, p) => s + p, 0) / paces.length : null;
+    const bestPace = paces.length ? Math.min(...paces) : null;
 
-    // Longest & fastest run
+    // ── Heart rate ──────────────────────────────────────────────────────────
+    const hrRuns = runs.filter(a => a.average_heartrate);
+    const avgHR  = hrRuns.length ? Math.round(hrRuns.reduce((s, a) => s + a.average_heartrate, 0) / hrRuns.length) : null;
+    const maxHR  = hrRuns.length ? Math.round(Math.max(...hrRuns.map(a => a.max_heartrate || a.average_heartrate))) : null;
+
+    // ── Elevation ───────────────────────────────────────────────────────────
+    const totalElevMonth = thisMonth.reduce((s, a) => s + (a.total_elevation_gain || 0), 0);
+    const sortedByElev   = [...runs].sort((a, b) => (b.total_elevation_gain || 0) - (a.total_elevation_gain || 0));
+
+    // ── Longest & fastest run ───────────────────────────────────────────────
     const sortedByDist = [...runs].sort((a, b) => b.distance - a.distance);
     const sortedByPace = [...runs].filter(a => a.distance > 2000).sort((a, b) =>
         (a.moving_time / a.distance) - (b.moving_time / b.distance)
     );
 
-    // Suffer scores
-    const sufferScores = allActs.filter(a => a.suffer_score).map(a => a.suffer_score);
-    const avgSuffer    = sufferScores.length ? Math.round(sufferScores.reduce((s,v) => s+v, 0) / sufferScores.length) : null;
+    // ── Suffer / effort ─────────────────────────────────────────────────────
+    const sufferData  = allActs.filter(a => a.suffer_score);
+    const avgSuffer   = sufferData.length ? Math.round(sufferData.reduce((s,a) => s + a.suffer_score, 0) / sufferData.length) : null;
 
-    // Consistency: active weeks in last 4
+    // ── PRs & Achievements ──────────────────────────────────────────────────
+    const totalPRs          = allActs.reduce((s, a) => s + (a.pr_count || 0), 0);
+    const totalAchievements = allActs.reduce((s, a) => s + (a.achievement_count || 0), 0);
+    const racesRun          = allActs.filter(a => a.workout_type === 1);
+    const longRuns          = runs.filter(a => a.workout_type === 2);
+
+    // ── Social ──────────────────────────────────────────────────────────────
+    const totalKudos    = allActs.reduce((s, a) => s + (a.kudos_count || 0), 0);
+    const totalComments = allActs.reduce((s, a) => s + (a.comment_count || 0), 0);
+
+    // ── Consistency ─────────────────────────────────────────────────────────
     const weekKeys = new Set(thisMonth.map(a => {
         const d = new Date(a.start_date);
         const ws = new Date(d); ws.setDate(d.getDate() - d.getDay());
         return ws.toISOString().slice(0, 10);
     }));
 
-    // YTD from Strava stats
-    const ytdRuns  = athleteStats?.ytd_run_totals;
-    const allRuns  = athleteStats?.all_run_totals;
+    // ── All sport types ─────────────────────────────────────────────────────
+    const sportBreakdown = {};
+    for (const a of allActs) sportBreakdown[a.type] = (sportBreakdown[a.type] || 0) + 1;
+
+    // ── YTD / all-time stats ─────────────────────────────────────────────────
+    const ytdRuns      = athleteStats?.ytd_run_totals;
+    const ytdRides     = athleteStats?.ytd_ride_totals;
+    const ytdSwims     = athleteStats?.ytd_swim_totals;
+    const recentRuns   = athleteStats?.recent_run_totals;
+    const recentRides  = athleteStats?.recent_ride_totals;
+    const allRunTotals = athleteStats?.all_run_totals;
 
     const today = new Date().toDateString();
 
     return `
 TODAY: ${today}
-ATHLETE: ${athlete.firstname} ${athlete.lastname} | ${athlete.city || 'Unknown city'}, ${athlete.country || ''} | Sex: ${athlete.sex || 'N/A'}
+ATHLETE: ${athlete.firstname} ${athlete.lastname} (${athlete.username || 'N/A'}) | ${athlete.city || 'Unknown city'}, ${athlete.state || ''}, ${athlete.country || ''} | Sex: ${athlete.sex || 'N/A'} | Premium: ${athlete.premium ? 'Yes' : 'No'}
+BIO: ${(typeof athlete.bio === 'string' ? athlete.bio : '') || 'Not set'}
 
-══ COMPUTED STATS (use these to answer directly) ══
-• This week  : ${weekKm.toFixed(1)} km across ${thisWeek.length} activit${thisWeek.length === 1 ? 'y' : 'ies'}
-• Last 28 days: ${monthKm.toFixed(1)} km across ${thisMonth.length} activit${thisMonth.length === 1 ? 'y' : 'ies'}
-• Avg pace (last ${runs.length} runs): ${fmt(avgPace)}
-• Best pace recorded: ${fmt(bestPace)}${sortedByPace[0] ? ` — "${sortedByPace[0].name}" on ${new Date(sortedByPace[0].start_date).toDateString()}` : ''}
-• Longest run: ${sortedByDist[0] ? `${(sortedByDist[0].distance/1000).toFixed(1)} km — "${sortedByDist[0].name}" on ${new Date(sortedByDist[0].start_date).toDateString()}` : 'N/A'}
-• Avg heart rate: ${avgHR ? `${avgHR} bpm` : 'N/A'} | Peak HR recorded: ${maxHR ? `${maxHR} bpm` : 'N/A'}
-• Avg suffer score: ${avgSuffer ?? 'N/A'}
-• Consistency: ${weekKeys.size}/4 weeks active in last 28 days (${Math.round(weekKeys.size / 4 * 100)}%)
-${ytdRuns ? `• YTD runs: ${ytdRuns.count} runs | ${(ytdRuns.distance/1000).toFixed(0)} km | ${Math.round(ytdRuns.moving_time/3600)} hrs` : ''}
-${allRuns  ? `• All-time: ${allRuns.count} runs | ${(allRuns.distance/1000).toFixed(0)} km` : ''}
+══ COMPUTED STATS — USE THESE TO ANSWER DIRECTLY ══
+• This week        : ${weekKm.toFixed(1)} km | ${thisWeek.length} activities | ${fmtDuration(thisWeek.reduce((s,a)=>s+a.moving_time,0))} total
+• Last 28 days     : ${monthKm.toFixed(1)} km | ${thisMonth.length} activities | ${totalElevMonth.toFixed(0)} m elevation
+• Avg pace (runs)  : ${fmt(avgPace)} | Best pace: ${fmt(bestPace)}${sortedByPace[0] ? ` — "${sortedByPace[0].name}" on ${new Date(sortedByPace[0].start_date).toDateString()}` : ''}
+• Longest run      : ${sortedByDist[0] ? `${(sortedByDist[0].distance/1000).toFixed(2)} km — "${sortedByDist[0].name}" on ${new Date(sortedByDist[0].start_date).toDateString()}` : 'N/A'}
+• Hilliest run     : ${sortedByElev[0] ? `${sortedByElev[0].total_elevation_gain}m elev — "${sortedByElev[0].name}"` : 'N/A'}
+• Avg HR           : ${avgHR ? `${avgHR} bpm` : 'N/A'} | Max HR recorded: ${maxHR ? `${maxHR} bpm` : 'N/A'} | Runs with HR data: ${hrRuns.length}
+• Avg suffer score : ${avgSuffer ?? 'N/A'}
+• Consistency      : ${weekKeys.size}/4 weeks active (${Math.round(weekKeys.size / 4 * 100)}%)
+• Total PRs (fetched activities): ${totalPRs} | Total achievements: ${totalAchievements}
+• Races logged     : ${racesRun.length} | Long runs logged: ${longRuns.length}
+• Social           : ${totalKudos} kudos received | ${totalComments} comments
+• Sport breakdown  : ${Object.entries(sportBreakdown).map(([t,c])=>`${t}: ${c}`).join(', ')}
+${ytdRuns?.count  ? `• YTD running  : ${ytdRuns.count} runs | ${(ytdRuns.distance/1000).toFixed(0)} km | ${Math.round(ytdRuns.moving_time/3600)} hrs | ${ytdRuns.elevation_gain?.toFixed(0)} m elev` : ''}
+${ytdRides?.count ? `• YTD cycling  : ${ytdRides.count} rides | ${(ytdRides.distance/1000).toFixed(0)} km | ${Math.round(ytdRides.moving_time/3600)} hrs` : ''}
+${ytdSwims?.count ? `• YTD swimming : ${ytdSwims.count} swims | ${(ytdSwims.distance/1000).toFixed(0)} km` : ''}
+${recentRuns?.count  ? `• Recent 4-week runs  : ${recentRuns.count} | ${(recentRuns.distance/1000).toFixed(0)} km | ${recentRuns.achievement_count} achievements` : ''}
+${recentRides?.count ? `• Recent 4-week rides : ${recentRides.count} | ${(recentRides.distance/1000).toFixed(0)} km` : ''}
+${allRunTotals?.count ? `• All-time running : ${allRunTotals.count} runs | ${(allRunTotals.distance/1000).toFixed(0)} km | ${Math.round(allRunTotals.moving_time/3600)} hrs` : ''}
 
-══ RECENT 30 ACTIVITIES (newest first) ══
-${allActs.slice(0, 30).map((a, i) => {
+══ RECENT 50 ACTIVITIES (newest first) ══
+${allActs.slice(0, 50).map((a, i) => {
     const pace = a.distance > 500 && a.moving_time > 0
         ? fmt((a.moving_time / 60) / (a.distance / 1000))
         : null;
-    return `${i+1}. ${new Date(a.start_date).toDateString()} | ${a.type} | "${a.name}" | ${(a.distance/1000).toFixed(2)} km | ${Math.round(a.moving_time/60)} min${pace ? ` | ${pace}` : ''}${a.total_elevation_gain ? ` | ${Math.round(a.total_elevation_gain)}m elev` : ''}${a.average_heartrate ? ` | ${Math.round(a.average_heartrate)} bpm` : ''}${a.suffer_score ? ` | suffer ${a.suffer_score}` : ''}`;
+    const wtype = a.workout_type != null && WORKOUT_TYPE_LABEL[a.workout_type] !== 'default'
+        ? ` [${WORKOUT_TYPE_LABEL[a.workout_type]}]` : '';
+    return [
+        `${i+1}. ${new Date(a.start_date).toDateString()}`,
+        a.type + wtype,
+        `"${a.name}"`,
+        `${(a.distance/1000).toFixed(2)} km`,
+        fmtDuration(a.moving_time),
+        pace ? pace : null,
+        a.total_elevation_gain ? `${Math.round(a.total_elevation_gain)}m elev` : null,
+        a.elev_high != null ? `high ${Math.round(a.elev_high)}m` : null,
+        a.average_heartrate ? `${Math.round(a.average_heartrate)} bpm avg` : null,
+        a.max_heartrate     ? `${Math.round(a.max_heartrate)} bpm max` : null,
+        a.suffer_score      ? `suffer ${a.suffer_score}` : null,
+        a.pr_count          ? `${a.pr_count} PR${a.pr_count > 1 ? 's' : ''}` : null,
+        a.achievement_count ? `${a.achievement_count} achiev` : null,
+        a.kudos_count       ? `${a.kudos_count} kudos` : null,
+        a.device_name       ? `device: ${a.device_name}` : null,
+        a.location_city     ? `${a.location_city}` : null,
+    ].filter(Boolean).join(' | ');
 }).join('\n')}
 `.trim();
 }
@@ -290,14 +345,14 @@ exports.chat = async (req, res) => {
 
         // Step 3a: Strava ─────────────────────────────────────────────────────
         if (category === 'strava') {
-            // Fetch all data in parallel: athlete profile + full activity list + YTD stats
+            // Fetch all data in parallel: athlete profile + up to 200 activities
             await ensureValidToken();
             const [athlete, activities] = await Promise.all([
                 fetchFromStrava('/athlete'),
-                fetchFromStrava('/athlete/activities?per_page=50'),
+                fetchFromStrava('/athlete/activities?per_page=200'),
             ]);
 
-            // Fetch YTD + all-time stats (non-blocking — don't fail chat if this fails)
+            // Fetch full stats (run + ride + swim YTD, recent, all-time)
             let athleteStats = {};
             try {
                 athleteStats = await fetchFromStrava(`/athletes/${athlete.id}/stats`);

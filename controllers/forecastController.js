@@ -147,25 +147,38 @@ exports.forecast = async (req, res) => {
 
         if (!goal) return res.status(400).json({ error: 'Goal is required.' });
 
-        // ── Step 1: Collect — fetch Strava data ──────────────────────────────────
+        // ── Step 1: Collect — fetch all Strava data ───────────────────────────────
         const [activities, athlete] = await Promise.all([
-            fetchFromStrava('/athlete/activities?per_page=50'),
+            fetchFromStrava('/athlete/activities?per_page=200'),
             fetchFromStrava('/athlete'),
         ]);
         const stats = await fetchFromStrava(`/athletes/${athlete.id}/stats`);
 
         const enriched = activities.map(a => ({
-            name:          a.name,
-            type:          a.type,
-            date:          a.start_date_local?.slice(0, 10),
-            distanceKm:    parseFloat((a.distance / 1000).toFixed(2)),
-            movingTimeMin: Math.round(a.moving_time / 60),
-            paceMinPerKm:  a.distance > 0 ? parseFloat(((a.moving_time / 60) / (a.distance / 1000)).toFixed(2)) : null,
-            avgSpeedKmh:   parseFloat((a.average_speed * 3.6).toFixed(1)),
-            elevationM:    Math.round(a.total_elevation_gain || 0),
-            avgHR:         a.average_heartrate ?? null,
-            sufferScore:   a.suffer_score ?? null,
-            estimatedKcal: estimateCalories(a.type, weight, a.moving_time),
+            name:             a.name,
+            type:             a.type,
+            sport_type:       a.sport_type || a.type,
+            workout_type:     a.workout_type ?? null,   // 0=default,1=race,2=long_run,3=workout
+            date:             a.start_date_local?.slice(0, 10),
+            distanceKm:       parseFloat((a.distance / 1000).toFixed(2)),
+            movingTimeMin:    Math.round(a.moving_time / 60),
+            elapsedTimeMin:   Math.round(a.elapsed_time / 60),
+            paceMinPerKm:     a.distance > 0 ? parseFloat(((a.moving_time / 60) / (a.distance / 1000)).toFixed(2)) : null,
+            avgSpeedKmh:      parseFloat((a.average_speed * 3.6).toFixed(1)),
+            maxSpeedKmh:      parseFloat(((a.max_speed || 0) * 3.6).toFixed(1)),
+            elevationM:       Math.round(a.total_elevation_gain || 0),
+            elevHighM:        a.elev_high != null ? Math.round(a.elev_high) : null,
+            elevLowM:         a.elev_low  != null ? Math.round(a.elev_low)  : null,
+            avgHR:            a.average_heartrate ?? null,
+            maxHR:            a.max_heartrate     ?? null,
+            hasHeartrate:     a.has_heartrate     ?? false,
+            sufferScore:      a.suffer_score      ?? null,
+            prCount:          a.pr_count          ?? 0,
+            achievementCount: a.achievement_count ?? 0,
+            kudosCount:       a.kudos_count       ?? 0,
+            deviceName:       a.device_name       ?? null,
+            location:         [a.location_city, a.location_country].filter(Boolean).join(', ') || null,
+            estimatedKcal:    estimateCalories(a.type, weight, a.moving_time),
         }));
 
         const cutoff = Date.now() - 28 * 24 * 60 * 60 * 1000;
