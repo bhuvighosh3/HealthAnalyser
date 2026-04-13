@@ -310,7 +310,7 @@ Return ONLY a valid JSON object (no markdown, no code fences):
         // ════════════════════════════════════════════════════════════════════════
         // AGENT 3 — Recommendation Agent  [HANDOFF from Hypothesis Agent]
         // ════════════════════════════════════════════════════════════════════════
-        const recommendationPrompt = `You are a world-class personal running coach and sports nutritionist.
+        const recommendationPrompt = `You are a world-class personal running coach.
 
 ## [HANDOFF FROM HYPOTHESIS CHECK AGENT]
 The hypothesis validation agent analysed this athlete's goal and produced the following verified findings.
@@ -326,8 +326,9 @@ ${JSON.stringify(hypothesis, null, 2)}
 - Required weekly: ${hypothesis.requiredState?.weeklyKcal ?? '?'} kcal | ${hypothesis.requiredState?.weeklyDistKm ?? '?'} km
 
 ## YOUR TASK
-Design a highly personalised, progressive plan that bridges the gap identified by the hypothesis agent.
+Design a highly personalised, progressive training plan that bridges the gap identified by the hypothesis agent.
 Address every identified gap and risk factor. Scale intensity/volume based on feasibility score.
+NOTE: Do NOT include nutrition advice — a dedicated AI Nutrition Agent handles that separately.
 
 Return ONLY a valid JSON object (no markdown, no code fences):
 {
@@ -340,9 +341,6 @@ Return ONLY a valid JSON object (no markdown, no code fences):
       "targetHR": "<e.g. 130–145 bpm or N/A>",
       "purpose": "<why this session>"
     }
-  ],
-  "nutritionTips": [
-    { "title": "<tip title>", "detail": "<specific advice>", "icon": "apple | flame | droplets | zap | salad" }
   ],
   "recoveryAdvice": [
     { "title": "<title>", "detail": "<specific advice>" }

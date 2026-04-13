@@ -1,6 +1,6 @@
 # AthleteIQ
 
-> AI-powered Strava health analyser — collects real training data, performs statistical EDA, hypothesises goal feasibility, delivers personalised plans, and generates RAG-grounded nutrition guidance. Powered by Google ADK (Gemini 2.5 Flash + Vertex AI).
+> AI-powered Strava health analyser — collects real training data, performs statistical EDA, hypothesises goal feasibility, delivers personalised training plans, and generates RAG-grounded nutrition guidance via a dedicated agent. Powered by Google ADK (Gemini 2.5 Flash + Vertex AI).
 
 **Live:** https://athleteiq-290375529887.us-central1.run.app
 
@@ -42,7 +42,9 @@ The Hypothesis Agent receives the EDA findings + raw activities + user profile a
 - `assumptions`, `gaps`, `riskFactors`
 - `summary`: 2–3 sentences grounded in the EDA data
 
-This is then handed off to the **Recommendation Agent** which generates the full training plan, nutrition tips, milestones, and weekly targets.
+This is then handed off to the **Recommendation Agent** which generates a personalised training plan, recovery advice, milestones, and weekly targets.
+
+> **Note:** Nutrition advice is intentionally excluded from the Recommendation Agent — it is handled by the dedicated **AI Nutrition Agent** (see below).
 
 ---
 
@@ -58,7 +60,9 @@ graph TD
     CalMCP["Google Calendar MCP\n(ADK MCPToolset)"]
     CalAPI["Google Calendar API"]
     SQLite["SQLite DB\n(health_data.db)"]
+    Firestore["Firestore Vector Store\n(nutrition_vectors)"]
     Firecrawl["Firecrawl Search API\n(nutrition RAG)"]
+    VertexEmbed["Vertex AI\ntext-embedding-004"]
 
     Browser -->|REST /api/*| Server
     Server -->|Token refresh| StravaAPI
@@ -70,7 +74,10 @@ graph TD
     CalMCP -->|OAuth2| CalAPI
     Server -->|read/write| SQLite
     Server -->|search + scrape| Firecrawl
-    Firecrawl -->|topic-labelled context| Server
+    Firecrawl -->|markdown chunks| Server
+    Server -->|embed chunks| VertexEmbed
+    VertexEmbed -->|768-dim vectors| Firestore
+    Firestore -->|findNearest COSINE| Server
 ```
 
 ---
@@ -90,12 +97,13 @@ flowchart TD
     HYP -->|structured JSON handoff| REC
 
     REC{Recommendation Agent\nGemini 2.5 Flash}
-    REC --> OUT[Training plan · Nutrition tips\nMilestones · Calendar scheduling]
+    REC --> OUT[Training plan · Recovery advice\nMilestones · Weekly targets]
 
     NUT{Nutrition RAG Agent\nADK LlmAgent}
-    Firecrawl[Firecrawl Search\nHopkins/WHO/Harvard] -->|topic-labelled sections| NUT
+    Firestore[(Firestore\nVector Store)] -->|top-K semantic chunks| NUT
+    FC[Firecrawl /search\nHopkins · WHO · Harvard] -->|first run only| Firestore
     OUT -->|user presses button| NUT
-    NUT --> NUTOUT[Personalised nutrition plan\ngrounded in crawled sources]
+    NUT --> NUTOUT[Personalised nutrition plan\ngrounded in authoritative sources]
 ```
 
 ---
@@ -109,18 +117,71 @@ flowchart TD
 | Agent framework | ✅ | **Google ADK** (`@google/adk`) — `LlmAgent`, `FunctionTool`, `MCPToolset`, `GOOGLE_SEARCH` |
 | Tool calling | ✅ | `compute_training_metrics` FunctionTool (EDA), Strava MCPToolset, Calendar MCPToolset |
 | Non-trivial dataset | ✅ | Strava activities API — real training history, fetched at runtime |
-| Multi-agent pattern | ✅ | EDA → Hypothesis → Recommendation (3-agent handoff) + Nutrition RAG Agent |
+| Multi-agent pattern | ✅ | EDA → Hypothesis → Recommendation (3-agent handoff) + separate Nutrition RAG Agent |
 | Deployed | ✅ | Google Cloud Run — https://athleteiq-290375529887.us-central1.run.app |
 | README | ✅ | This file |
 
-### Grab-Bag (≥2 required — we have 5)
+### Grab-Bag (≥2 required — we have 6)
 | Concept | Status | Location |
 |---|---|---|
 | Structured output | ✅ | Hypothesis JSON + Recommendation JSON with strict schemas |
 | Data visualization | ✅ | Chart.js — distance, pace, weekly volume, HR zones, efficiency |
 | Second data retrieval | ✅ | Google Search grounding (fitness chat) + Firecrawl search (nutrition RAG) |
 | Iterative refinement loop | ✅ | ADK `runAgent` event loop; EDA FunctionTool; Calendar MCPToolset multi-round |
-| RAG | ✅ | Firecrawl searches nutrition sources → topic-labelled context → ADK Nutrition Agent |
+| RAG | ✅ | Firecrawl → Vertex AI embeddings → Firestore vector store → `findNearest` semantic search → Nutrition Agent |
+| Login / multi-account | ✅ | Login page with own-credentials mode and sample account (Bhuvi's real data) |
+
+---
+
+## Login Page
+
+The app starts with a login screen (`/login.html`) offering two modes:
+
+| Mode | Description |
+|---|---|
+| **My Account** | Enter your own Strava Client ID, Client Secret, Access Token, and Refresh Token. The server switches to your account live. |
+| **Sample Account** | Use Bhuvi's real Strava data — no setup needed. |
+
+Session is stored in `localStorage`. A **Logout** button in the header clears the session and returns to login.
+
+---
+
+## Nutrition RAG Pipeline
+
+```mermaid
+flowchart LR
+    GOAL([User goal\ne.g. Run a marathon]) --> CLASSIFY{classifyGoal\nrunning / weight_loss\ncycling / general}
+    CLASSIFY --> CHECK{Firestore\nhasValidChunks\nTTL = 7 days}
+    CHECK -->|fresh| SEARCH[semanticSearch\nfindNearest COSINE\ntop-8 chunks]
+    CHECK -->|stale / empty| FC[Firecrawl /search\nJohns Hopkins · WHO · Harvard]
+    FC --> EMBED[Vertex AI\ntext-embedding-004\n768-dim vectors]
+    EMBED --> FS[(Firestore\nnutrition_vectors)]
+    FS --> SEARCH
+    SEARCH --> AGENT[ADK LlmAgent\nNutrition Agent\nGemini 2.5 Flash]
+    STRAVA[Live Strava data] --> AGENT
+    AGENT --> PLAN([Personalised nutrition plan])
+```
+
+Chunks are crawled **once per 7 days per goal category** and stored in Firestore with Vertex AI vector embeddings. Subsequent requests skip the crawl entirely and go straight to semantic search.
+
+---
+
+## Chat Intent Routing
+
+```mermaid
+flowchart LR
+    MSG([User message]) --> ROUTER{Router\nfew-shot classify}
+    ROUTER -->|greeting| GREET[Friendly welcome reply]
+    ROUTER -->|strava| MCP[ADK LlmAgent + MCPToolset\nPre-fetched REST context\n+ 50 activities + YTD stats]
+    ROUTER -->|fitness| SEARCH[ADK LlmAgent + GOOGLE_SEARCH\nFitness knowledge]
+    ROUTER -->|off-topic| REFUSE[Instant refusal]
+    MCP --> REPLY([Rendered reply])
+    SEARCH --> REPLY
+    GREET --> REPLY
+    REFUSE --> REPLY
+```
+
+Chat replies render markdown (bold, bullets, headings) as formatted HTML in the chat bubble.
 
 ---
 
@@ -146,37 +207,6 @@ sequenceDiagram
         Strava-->>Server: new access_token
         Server->>Server: resetMcpClient() — respawn with fresh token
     end
-```
-
----
-
-## Chat Intent Routing
-
-```mermaid
-flowchart LR
-    MSG([User message]) --> ROUTER{Router Agent\nfew-shot classify}
-    ROUTER -->|strava| MCP[ADK LlmAgent + MCPToolset\nLive Strava data + REST context]
-    ROUTER -->|fitness| SEARCH[ADK LlmAgent + GOOGLE_SEARCH\nFitness knowledge]
-    ROUTER -->|off-topic| REFUSE[Instant refusal\nno AI call]
-    MCP --> REPLY([Reply to user])
-    SEARCH --> REPLY
-    REFUSE --> REPLY
-```
-
----
-
-## Nutrition RAG Pipeline
-
-```mermaid
-flowchart LR
-    GOAL([User goal\ne.g. Run a marathon]) --> CLASSIFY{classifyGoal\nrunning/weight_loss\ncycling/general}
-    CLASSIFY --> QUERIES[Goal-specific\nFirecrawl search queries]
-    QUERIES --> FC[Firecrawl /search\nJohns Hopkins · WHO · Harvard]
-    FC --> STRUCT[structureContent\nTopic-labelled sections\nPRE-WORKOUT · CARBS\nHYDRATION · RECOVERY...]
-    STRUCT --> CACHE[(In-memory cache\n6h TTL)]
-    CACHE --> AGENT[ADK LlmAgent\nNutrition Agent\nGemini 2.5 Flash]
-    STRAVA[Live Strava data] --> AGENT
-    AGENT --> PLAN([Personalised nutrition plan])
 ```
 
 ---
@@ -215,7 +245,20 @@ Create `gcp-oauth.keys.json` with your OAuth 2.0 Desktop credentials, set `GOOGL
 GOOGLE_OAUTH_CREDENTIALS=/path/to/gcp-oauth.keys.json npx @cocal/google-calendar-mcp auth
 ```
 
-### 5. Run
+### 5. GCP Firestore (vector store for Nutrition RAG)
+```bash
+gcloud services enable firestore.googleapis.com --project <PROJECT>
+gcloud firestore databases create --location=us-central1 --project <PROJECT>
+# Vector index (run once — takes ~5 min)
+gcloud firestore indexes composite create \
+  --collection-group=nutrition_vectors \
+  --query-scope=COLLECTION \
+  --field-config=field-path=goalCategory,order=ASCENDING \
+  --field-config=field-path=embedding,vector-config='{"dimension":768,"flat":{}}' \
+  --project=<PROJECT>
+```
+
+### 6. Run
 ```bash
 npm start  # http://localhost:3000
 ```
@@ -232,6 +275,7 @@ npm start  # http://localhost:3000
 | Model | Gemini 2.5 Flash via Vertex AI |
 | Strava data | Strava REST API + `@r-huijts/strava-mcp-server` (ADK MCPToolset) |
 | Calendar | `@cocal/google-calendar-mcp` (ADK MCPToolset) |
-| Nutrition RAG | Firecrawl `/search` → topic-labelled context → ADK LlmAgent |
+| Nutrition RAG | Firecrawl `/search` → Vertex AI `text-embedding-004` → Firestore vector store → `findNearest` COSINE search |
+| Vector DB | Google Firestore (`nutrition_vectors` collection, 768-dim vectors) |
 | Database | SQLite (`sqlite3`) — activity cache |
 | Deployment | Google Cloud Run (`healthmonitor-493021`, `us-central1`) |

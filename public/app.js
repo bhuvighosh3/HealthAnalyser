@@ -135,27 +135,31 @@ async function sendChatMessage() {
         const data = await response.json();
 
         const loaderEl = document.getElementById(loaderId);
-        if (loaderEl) loaderEl.innerText = data.reply || data.error;
+        if (loaderEl) loaderEl.innerHTML = markdownToHtml(data.reply || data.error);
 
     } catch (err) {
         const loaderEl = document.getElementById(loaderId);
-        if (loaderEl) loaderEl.innerText = "Error trying to reach the assistant.";
+        if (loaderEl) loaderEl.innerHTML = markdownToHtml("Error trying to reach the assistant.");
     }
 }
 
 function addMessage(text, sender) {
     const msgDiv = document.createElement('div');
     msgDiv.className = `message ${sender}`;
-    msgDiv.innerText = text;
+    // User messages are plain text; AI messages render markdown
+    if (sender === 'ai') {
+        msgDiv.innerHTML = markdownToHtml(text);
+    } else {
+        msgDiv.innerText = text;
+    }
 
-    // Assign an ID for updating loaders
     const msgId = 'msg-' + Date.now();
     msgDiv.id = msgId;
 
     chatMessages.appendChild(msgDiv);
     chatMessages.scrollTop = chatMessages.scrollHeight;
 
-    lucide.createIcons(); // Reactivate icons if any injected
+    lucide.createIcons();
     return msgId;
 }
 
@@ -509,24 +513,14 @@ function renderForecastResults({ hypothesis, recommendations, edaSummary, weekly
                 <span class="plan-intensity intensity-${(d.intensity||'moderate').toLowerCase()}">${d.intensity||''}</span>
             </div>`).join('')}`;
 
-    // 8. Nutrition
-    const nutrition = recommendations.nutritionTips || [];
-    document.getElementById('nutritionTips').innerHTML = `
-        <p class="sub-title">Nutrition</p>
-        ${nutrition.map(n => `
-            <div class="nutrition-tip">
-                <span class="nutrition-tip-icon"><i data-lucide="${n.icon || 'apple'}"></i></span>
-                <div><div class="nutrition-tip-title">${n.title}</div><div class="nutrition-tip-detail">${n.detail}</div></div>
-            </div>`).join('')}`;
-
-    // 9. Recovery
+    // 8. Recovery
     const recovery = recommendations.recoveryAdvice || [];
-    const recHtml = recovery.length ? `
-        ${recovery.map(r => `<div class="sub-item"><strong>${r.title}:</strong> ${r.detail}</div>`).join('')}` : '';
-    if (recHtml) {
-        document.getElementById('nutritionTips').innerHTML +=
-            `<p class="sub-title" style="margin-top:1rem">Recovery</p>${recHtml}`;
-    }
+    const recHtml = recovery.length
+        ? recovery.map(r => `<div class="sub-item"><strong>${r.title}:</strong> ${r.detail}</div>`).join('')
+        : '';
+    document.getElementById('nutritionTips').innerHTML = recHtml
+        ? `<p class="sub-title">Recovery</p>${recHtml}`
+        : '';
 
     // 10. Milestones
     const milestones = recommendations.milestones || [];
