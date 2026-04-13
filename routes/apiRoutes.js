@@ -6,6 +6,11 @@ const aiController = require('../controllers/aiController');
 const forecastController = require('../controllers/forecastController');
 const scheduleController = require('../controllers/scheduleController');
 const nutritionController = require('../controllers/nutritionController');
+const authController      = require('../controllers/authController');
+
+// Auth Routes
+router.post('/auth/configure', authController.configure);
+router.post('/auth/sample',    authController.useSample);
 
 // Strava Data Routes
 router.get('/athlete', stravaController.getAthlete);

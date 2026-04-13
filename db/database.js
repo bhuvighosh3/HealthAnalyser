@@ -111,6 +111,20 @@ async function initDatabase() {
             fetched_at      TEXT
         )
     `);
+    // Vector store for nutrition RAG — chunks + Vertex AI embeddings
+    await runSQL(`
+        CREATE TABLE IF NOT EXISTS nutrition_vectors (
+            id             INTEGER PRIMARY KEY AUTOINCREMENT,
+            goal_category  TEXT    NOT NULL,
+            topic_label    TEXT,
+            content_text   TEXT    NOT NULL,
+            source_title   TEXT,
+            embedding_json TEXT    NOT NULL,
+            created_at     TEXT    NOT NULL
+        )
+    `);
+    await runSQL(`CREATE INDEX IF NOT EXISTS idx_nv_category ON nutrition_vectors(goal_category)`);
+    console.log('✅ nutrition_vectors table ready');
 
     try {
         if (!tokens.ACCESS_TOKEN) return;

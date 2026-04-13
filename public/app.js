@@ -1,5 +1,10 @@
 let currentAthleteId = null;
 
+function handleLogout() {
+    localStorage.removeItem('athleteiq_mode');
+    window.location.href = '/login.html';
+}
+
 document.addEventListener('DOMContentLoaded', async () => {
     try {
         // Fetch athlete profile
@@ -719,60 +724,75 @@ function escapeHtml(str) {
 }
 
 /**
- * Minimal markdown → HTML converter for AI-generated reports.
- * Handles: ### headings, **bold**, *italic*, bullet lists, numbered lists, blank lines → paragraphs.
+ * Markdown → HTML converter for AI-generated EDA and nutrition reports.
+ * Handles: headings (#–####), **bold**, *italic*, bullet/numbered lists,
+ * horizontal rules, code spans, and blank-line paragraph breaks.
  */
 function markdownToHtml(md) {
     if (!md) return '';
-    const lines = md.split('\n');
-    let html = '';
-    let inList = false;
-    let listTag = '';
+
+    // ── Step 1: normalise line endings ──────────────────────────────────────
+    const lines = md.replace(/\r\n/g, '\n').split('\n');
+    let html     = '';
+    let inList   = false;
+    let listTag  = '';
 
     const closeList = () => {
         if (inList) { html += `</${listTag}>`; inList = false; listTag = ''; }
     };
 
-    const inlineFormat = (text) =>
-        text
-            .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
-            .replace(/\*\*\*(.+?)\*\*\*/g, '<strong><em>$1</em></strong>')
-            .replace(/\*\*(.+?)\*\*/g,     '<strong>$1</strong>')
-            .replace(/\*(.+?)\*/g,          '<em>$1</em>')
-            .replace(/`(.+?)`/g,            '<code>$1</code>');
+    // Escape HTML entities FIRST, then apply inline markdown patterns
+    const esc = (t) => t.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+
+    const inline = (text) =>
+        esc(text)
+            .replace(/\*\*\*(.+?)\*\*\*/gs, '<strong><em>$1</em></strong>')
+            .replace(/\*\*(.+?)\*\*/gs,     '<strong>$1</strong>')
+            .replace(/\*([^*\n]+?)\*/g,     '<em>$1</em>')
+            .replace(/`([^`]+)`/g,          '<code>$1</code>');
+
+    // Strip any leftover raw heading markers inside text (e.g. #### that leaked)
+    const stripHeadingMarkers = (t) => t.replace(/^#+\s*/, '');
 
     for (const raw of lines) {
         const line = raw.trimEnd();
+        const trim = line.trim();
 
-        // Headings
-        if (/^####\s/.test(line))      { closeList(); html += `<h4>${inlineFormat(line.slice(5))}</h4>`; continue; }
-        if (/^###\s/.test(line))       { closeList(); html += `<h3>${inlineFormat(line.slice(4))}</h3>`; continue; }
-        if (/^##\s/.test(line))        { closeList(); html += `<h3>${inlineFormat(line.slice(3))}</h3>`; continue; }
-        if (/^#\s/.test(line))         { closeList(); html += `<h3>${inlineFormat(line.slice(2))}</h3>`; continue; }
+        // ── Headings (with or without trailing space) ────────────────────
+        const hm = trim.match(/^(#{1,4})\s*(.*)/);
+        if (hm) {
+            closeList();
+            const level  = hm[1].length;            // 1–4
+            const hLevel = level <= 2 ? 'h3' : 'h4'; // map # and ## → h3, ### and #### → h4
+            html += `<${hLevel}>${inline(hm[2])}</${hLevel}>`;
+            continue;
+        }
 
-        // Horizontal rule
-        if (/^---+$/.test(line.trim())) { closeList(); html += '<hr>'; continue; }
+        // ── Horizontal rule ──────────────────────────────────────────────
+        if (/^[-*_]{3,}$/.test(trim)) { closeList(); html += '<hr>'; continue; }
 
-        // Bullet list
-        if (/^[\*\-]\s/.test(line)) {
+        // ── Bullet list (-, *, +, with optional leading spaces) ─────────
+        const bm = line.match(/^[\s]*[-*+]\s+(.*)/);
+        if (bm) {
             if (!inList || listTag !== 'ul') { closeList(); html += '<ul>'; inList = true; listTag = 'ul'; }
-            html += `<li>${inlineFormat(line.slice(2))}</li>`;
+            html += `<li>${inline(bm[1])}</li>`;
             continue;
         }
 
-        // Numbered list
-        if (/^\d+\.\s/.test(line)) {
+        // ── Numbered list ────────────────────────────────────────────────
+        const nm = line.match(/^[\s]*\d+[.)]\s+(.*)/);
+        if (nm) {
             if (!inList || listTag !== 'ol') { closeList(); html += '<ol>'; inList = true; listTag = 'ol'; }
-            html += `<li>${inlineFormat(line.replace(/^\d+\.\s/, ''))}</li>`;
+            html += `<li>${inline(nm[1])}</li>`;
             continue;
         }
 
-        // Blank line
-        if (line.trim() === '') { closeList(); html += '<br>'; continue; }
+        // ── Blank line → paragraph break ────────────────────────────────
+        if (trim === '') { closeList(); continue; }
 
-        // Normal paragraph line
+        // ── Normal paragraph ─────────────────────────────────────────────
         closeList();
-        html += `<p>${inlineFormat(line)}</p>`;
+        html += `<p>${inline(stripHeadingMarkers(line))}</p>`;
     }
     closeList();
     return html;

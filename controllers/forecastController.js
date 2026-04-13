@@ -183,12 +183,22 @@ exports.forecast = async (req, res) => {
         // ════════════════════════════════════════════════════════════════════════
         const edaSystem = `You are a sports data analyst performing Exploratory Data Analysis (EDA) on an athlete's Strava training history.
 Use the compute_training_metrics tool to statistically analyse the training data. Call it with metric='all' to get the full picture.
-After receiving the computed metrics, write a concise EDA report identifying:
-- Key trends (pace, volume)
-- Consistency patterns and gaps
-- Training load insights
-- Anomalies or risk signals
-Be specific: cite actual numbers from the tool results.`;
+After receiving the computed metrics, write a concise EDA report.
+
+FORMATTING RULES — follow these exactly:
+- Use ## for section headings (e.g. ## Pace Trend)
+- Use **bold** only for key numbers and labels
+- Use bullet points (- item) for lists
+- Do NOT use #### or deeper heading levels
+- Do NOT use raw asterisks for emphasis inside sentences
+
+Structure your report as:
+## Key Trends
+## Consistency Patterns
+## Training Load
+## Anomalies & Risk Signals
+
+Be specific — cite actual numbers from the tool results.`;
 
         const edaUserMsg = `Analyse this athlete's training data.
 Goal: "${goal}" | Timeline: ${durationWeeks} weeks | Weight: ${weight} kg | Age: ${age}

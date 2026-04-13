@@ -76,7 +76,16 @@ Be specific: give gram amounts, example foods, and timing windows.`;
         });
 
         console.log('[Nutrition] Running ADK nutrition agent...');
-        const userPrompt = `Create my personalised nutrition plan for the goal: "${goal}". Focus on practical, specific advice I can implement immediately.`;
+        const userPrompt = `Create my personalised nutrition plan for the goal: "${goal}". Focus on practical, specific advice I can implement immediately.
+
+FORMATTING RULES — follow these exactly:
+- Use ## for main section headings (e.g. ## Pre-Workout Fuelling)
+- Use **bold** only for key numbers, food names, and labels
+- Use bullet points (- item) for lists and tips
+- Use numbered lists (1. 2. 3.) for step-by-step instructions
+- Do NOT use #### or deeper heading levels
+- Do NOT use raw asterisks at the start of a line as bullets — use - instead
+- Keep the plan clear, scannable, and practical`;
 
         let planText = await runAgent(nutritionAgent, userPrompt);
 

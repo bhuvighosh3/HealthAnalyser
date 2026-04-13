@@ -1,17 +1,20 @@
 /**
  * Nutrition RAG Service
- * Uses Firecrawl /search to dynamically retrieve authoritative sports-nutrition
- * content and structures it into topic-labelled sections for injection into the
- * Nutrition ADK agent as grounding context.
  *
- * Requires: FIRECRAWL_API_KEY in .env
- * Falls back to empty context (Gemini uses its own training data) if key is absent.
+ * Flow:
+ *  1. Check Firestore vector store for fresh chunks (TTL = 7 days).
+ *  2. If stale/empty → crawl via Firecrawl /search, extract topic-labelled chunks,
+ *     embed each with Vertex AI text-embedding-004, store in Firestore.
+ *  3. Run semantic search (Firestore findNearest, or cosine fallback) for the
+ *     user's goal, return top-K chunks formatted as a labelled context string.
+ *
+ * Requires: FIRECRAWL_API_KEY in env (fallback: model uses own knowledge).
  */
 
 const { FirecrawlClient } = require('@mendable/firecrawl-js');
+const { storeChunks, semanticSearch, hasValidChunks, chunksToContext } = require('./vectorStoreService');
 
 // ── Search queries per goal category ─────────────────────────────────────────
-// Queries target authoritative sources: WHO, Harvard HSPH, Johns Hopkins, NHS
 const SEARCH_QUERIES = {
     running: [
         'runner diet nutrition carbohydrates protein hydration site:hopkinsmedicine.org OR site:nutritionsource.hsph.harvard.edu',
@@ -34,7 +37,7 @@ const SEARCH_QUERIES = {
     ],
 };
 
-// Topic labels mapped to keyword patterns
+// Topic labels and keyword matchers for chunk classification
 const TOPIC_LABELS = {
     'PRE-WORKOUT NUTRITION':      ['before exercise', 'pre-run', 'pre-workout', 'before training', 'fueling before', '1-2 hours before', 'pre-race'],
     'POST-WORKOUT RECOVERY':      ['after exercise', 'post-run', 'post-workout', 'recovery meal', 'muscle repair', 'refuel', 'within 30', 'replenish'],
@@ -44,14 +47,7 @@ const TOPIC_LABELS = {
     'RACE-DAY NUTRITION':         ['race day', 'marathon morning', 'competition day', 'before a race', 'race nutrition'],
     'WEIGHT MANAGEMENT':          ['weight loss', 'calorie deficit', 'fat loss', 'body weight', 'BMI', 'body composition'],
     'DAILY NUTRITION TARGETS':    ['daily calorie', 'macronutrient', 'daily intake', 'macro ratio', 'caloric needs'],
-    'GENERAL SPORTS NUTRITION':   [],   // catch-all
 };
-
-// In-memory cache: key = goalCategory, value = { context, ts }
-const CACHE = {};
-const CACHE_TTL_MS = 6 * 60 * 60 * 1000; // 6 hours
-
-// ── Helpers ───────────────────────────────────────────────────────────────────
 
 function classifyGoal(goal = '') {
     const g = goal.toLowerCase();
@@ -64,107 +60,126 @@ function classifyGoal(goal = '') {
 function detectTopic(text) {
     const t = text.toLowerCase();
     for (const [label, keywords] of Object.entries(TOPIC_LABELS)) {
-        if (keywords.length === 0) continue;
         if (keywords.some(kw => t.includes(kw))) return label;
     }
     return 'GENERAL SPORTS NUTRITION';
 }
 
 /**
- * Convert a search result's markdown content into topic-labelled sections.
- * Groups clean paragraphs under their detected topic header.
+ * Parse scraped markdown into an array of {topic, text, source} chunk objects.
+ * Each chunk = one substantive paragraph classified by topic keyword matching.
  */
-function structureContent(title, markdown) {
-    if (!markdown) return '';
-    const lines = markdown.split(/\n{2,}/);
-    const sections = {};
+function extractChunks(markdown, sourceTitle) {
+    if (!markdown) return [];
+    const chunks = [];
+    const lines  = markdown.split(/\n{2,}/);
 
     for (const line of lines) {
-        // Strip image markdown, links, and formatting symbols
         const clean = line
-            .replace(/!\[.*?\]\(.*?\)/g, '')        // remove images
-            .replace(/\[([^\]]*)\]\([^)]*\)/g, '$1') // keep link text, drop URL
+            .replace(/!\[.*?\]\(.*?\)/g, '')         // strip images
+            .replace(/\[([^\]]*)\]\([^)]*\)/g, '$1')  // keep link text
             .replace(/[#*`>\-]+/g, '')
             .trim();
-        if (clean.length < 80)  continue;   // skip short stubs / navigation
-        if (clean.length > 1500) continue;  // skip giant blobs
-        const topic = detectTopic(clean);
-        if (!sections[topic]) sections[topic] = [];
-        if (sections[topic].length < 3) {   // max 3 paragraphs per topic
-            sections[topic].push(clean.slice(0, 600));
-        }
+
+        if (clean.length < 80 || clean.length > 1500) continue;  // skip nav/blobs
+
+        chunks.push({
+            topic:  detectTopic(clean),
+            text:   clean.slice(0, 700),
+            source: sourceTitle,
+        });
     }
-
-    const built = Object.entries(sections)
-        .filter(([, paras]) => paras.length > 0)
-        .map(([label, paras]) => `## ${label}\n${paras.join('\n')}`)
-        .join('\n\n');
-
-    return built ? `<!-- Source: ${title} -->\n${built}` : '';
+    return chunks;
 }
 
 // ── Public API ────────────────────────────────────────────────────────────────
 
 /**
- * Search, scrape and structure nutrition context for the given goal.
- * Returns a labelled markdown string ready for injection into the agent prompt.
- * Falls back to '' if FIRECRAWL_API_KEY is absent or all searches fail.
+ * Get grounding context for the given goal.
  *
- * @param {string} goal  User's fitness goal (free text)
- * @returns {Promise<string>}
+ * On first call (or after TTL): crawls Firecrawl, embeds chunks, stores in Firestore.
+ * On subsequent calls: semantic search against Firestore — no HTTP crawl needed.
+ *
+ * @param {string} goal  User's fitness goal
+ * @returns {Promise<string>}  Topic-labelled markdown context string
  */
 async function getNutritionContext(goal) {
-    const apiKey = process.env.FIRECRAWL_API_KEY;
-    if (!apiKey) {
-        console.warn('[NutritionRAG] No FIRECRAWL_API_KEY — using model knowledge only.');
-        return '';
-    }
-
     const category = classifyGoal(goal);
 
-    // Return from cache if still fresh
-    const cached = CACHE[category];
-    if (cached && Date.now() - cached.ts < CACHE_TTL_MS) {
-        console.log(`[NutritionRAG] Cache hit for "${category}" (${cached.context.length} chars)`);
-        return cached.context;
+    // ── Step 1: Check vector store for fresh data ─────────────────────────────
+    let vectorsReady = false;
+    try {
+        vectorsReady = await hasValidChunks(category);
+    } catch (e) {
+        console.warn('[NutritionRAG] Firestore check failed:', e.message.slice(0, 80));
     }
 
-    const queries = SEARCH_QUERIES[category] || SEARCH_QUERIES.general;
-    console.log(`[NutritionRAG] Searching Firecrawl for goal="${goal}" (category=${category}) — ${queries.length} queries`);
-
-    const fc = new FirecrawlClient({ apiKey });
-    const allSections = [];
-
-    // Run queries in parallel — best-effort (failures don't block the response)
-    const results = await Promise.allSettled(
-        queries.map(q =>
-            fc.search(q, { limit: 2, scrapeOptions: { formats: ['markdown'], onlyMainContent: true } })
-        )
-    );
-
-    for (const r of results) {
-        if (r.status === 'rejected') {
-            console.warn('[NutritionRAG] Search failed:', r.reason?.message?.slice(0, 80));
-            continue;
+    // ── Step 2: Crawl + embed + store (only when store is empty/stale) ────────
+    if (!vectorsReady) {
+        const apiKey = process.env.FIRECRAWL_API_KEY;
+        if (!apiKey) {
+            console.warn('[NutritionRAG] No FIRECRAWL_API_KEY — skipping crawl, using model knowledge.');
+            return '';
         }
-        // Firecrawl search returns r.web as an array-like object with numeric keys
-        const webObj = r.value?.web || {};
-        const items  = Array.isArray(webObj) ? webObj : Object.values(webObj);
-        for (const item of items) {
-            const md    = item.markdown || item.content || '';
-            const title = item.title    || item.url    || 'source';
-            if (md.length > 300) {
-                const structured = structureContent(title, md);
-                if (structured) allSections.push(structured);
+
+        console.log(`[NutritionRAG] Vector store empty/stale for "${category}" — crawling Firecrawl...`);
+        const queries = SEARCH_QUERIES[category] || SEARCH_QUERIES.general;
+        const fc      = new FirecrawlClient({ apiKey });
+
+        const allChunks = [];
+        const results   = await Promise.allSettled(
+            queries.map(q =>
+                fc.search(q, { limit: 2, scrapeOptions: { formats: ['markdown'], onlyMainContent: true } })
+            )
+        );
+
+        for (const r of results) {
+            if (r.status === 'rejected') {
+                console.warn('[NutritionRAG] Search error:', r.reason?.message?.slice(0, 60));
+                continue;
+            }
+            const webObj = r.value?.web || {};
+            const items  = Array.isArray(webObj) ? webObj : Object.values(webObj);
+            for (const item of items) {
+                if ((item.markdown || item.content || '').length > 300) {
+                    const chunks = extractChunks(item.markdown || item.content, item.title || item.url || 'source');
+                    allChunks.push(...chunks);
+                }
             }
         }
+
+        console.log(`[NutritionRAG] Extracted ${allChunks.length} chunks → embedding + storing in Firestore...`);
+
+        try {
+            await storeChunks(category, allChunks);
+            vectorsReady = true;
+        } catch (e) {
+            console.warn('[NutritionRAG] Failed to store vectors:', e.message.slice(0, 80));
+            // Still try to return a context from the raw chunks (no vector search)
+            if (allChunks.length) {
+                const byTopic = {};
+                for (const c of allChunks.slice(0, 20)) {
+                    if (!byTopic[c.topic]) byTopic[c.topic] = [];
+                    if (byTopic[c.topic].length < 2) byTopic[c.topic].push(c.text);
+                }
+                return Object.entries(byTopic)
+                    .map(([t, texts]) => `## ${t}\n${texts.join('\n')}`)
+                    .join('\n\n');
+            }
+            return '';
+        }
     }
 
-    const context = allSections.join('\n\n---\n\n');
-    console.log(`[NutritionRAG] Built ${context.length} chars of nutrition context from ${allSections.length} pages`);
-
-    CACHE[category] = { context, ts: Date.now() };
-    return context;
+    // ── Step 3: Semantic search — retrieve top-K relevant chunks ─────────────
+    try {
+        const chunks  = await semanticSearch(goal, category, 8);
+        const context = chunksToContext(chunks);
+        console.log(`[NutritionRAG] Semantic search returned ${chunks.length} chunks (${context.length} chars) for goal="${goal}"`);
+        return context;
+    } catch (e) {
+        console.warn('[NutritionRAG] Semantic search failed:', e.message.slice(0, 80));
+        return '';
+    }
 }
 
 module.exports = { getNutritionContext, classifyGoal };

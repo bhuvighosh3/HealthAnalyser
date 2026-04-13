@@ -11,6 +11,12 @@
     <link rel="stylesheet" href="styles.css">
     <script src="https://unpkg.com/lucide@latest"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+    <script>
+        // Redirect to login if no session is set
+        if (!localStorage.getItem('athleteiq_mode')) {
+            window.location.href = '/login.html';
+        }
+    </script>
 </head>
 
 <body>
@@ -23,12 +29,18 @@
                 <i data-lucide="activity" class="brand-icon"></i>
                 <h1>AthleteIQ</h1>
             </div>
-            <div class="profile-skeleton" id="profileContainer">
-                <div class="avatar skeleton"></div>
-                <div class="profile-info">
-                    <div class="name-skeleton skeleton"></div>
-                    <div class="loc-skeleton skeleton"></div>
+            <div style="display:flex;align-items:center;gap:1.25rem;">
+                <div class="profile-skeleton" id="profileContainer">
+                    <div class="avatar skeleton"></div>
+                    <div class="profile-info">
+                        <div class="name-skeleton skeleton"></div>
+                        <div class="loc-skeleton skeleton"></div>
+                    </div>
                 </div>
+                <button id="logoutBtn" onclick="handleLogout()" title="Log out" style="background:rgba(56,189,248,0.1);border:1px solid rgba(56,189,248,0.25);border-radius:10px;padding:0.45rem 0.7rem;cursor:pointer;display:flex;align-items:center;gap:0.4rem;color:#7ec8e3;font-size:0.78rem;font-family:inherit;transition:background 0.2s;">
+                    <i data-lucide="log-out" style="width:15px;height:15px;stroke:#7ec8e3;"></i>
+                    Logout
+                </button>
             </div>
         </header>
 

@@ -1,0 +1,299 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>AthleteIQ — Welcome</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;800&display=swap" rel="stylesheet" />
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <style>
+        :root {
+            --bg:          #050a12;
+            --bg-panel:    rgba(8, 20, 40, 0.72);
+            --text:        #e2f4ff;
+            --text-muted:  #7ec8e3;
+            --accent:      #38bdf8;
+            --accent-dim:  rgba(56, 189, 248, 0.18);
+            --accent-glow: rgba(56, 189, 248, 0.35);
+            --border:      rgba(56, 189, 248, 0.18);
+            --shadow:      0 8px 32px rgba(0,0,0,0.6);
+            --gradient:    linear-gradient(135deg, #38bdf8 0%, #0ea5e9 50%, #2dd4bf 100%);
+            --danger:      #f87171;
+        }
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+
+        body {
+            background-color: var(--bg);
+            color: var(--text);
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            overflow: hidden;
+            position: relative;
+            padding: 2rem 1rem;
+        }
+
+        .blob {
+            position: absolute;
+            filter: blur(110px);
+            z-index: 0;
+            opacity: 0.2;
+            animation: drift 22s infinite alternate ease-in-out;
+            border-radius: 50%;
+            pointer-events: none;
+        }
+        .blob-1 { top: -140px; left: -140px; width: 500px; height: 500px; background: #0ea5e9; }
+        .blob-2 { bottom: -140px; right: -140px; width: 580px; height: 580px; background: #2dd4bf; }
+        @keyframes drift {
+            from { transform: translate(0,0) scale(1); }
+            to   { transform: translate(60px,40px) scale(1.12); }
+        }
+
+        .card {
+            position: relative;
+            z-index: 1;
+            background: var(--bg-panel);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            border: 1px solid var(--border);
+            border-radius: 28px;
+            box-shadow: var(--shadow);
+            padding: 3rem 2.5rem;
+            width: 100%;
+            max-width: 480px;
+            text-align: center;
+        }
+
+        .logo { display: flex; align-items: center; justify-content: center; gap: 0.75rem; margin-bottom: 0.5rem; }
+        .logo-icon { stroke: var(--accent); width: 40px; height: 40px; }
+        .logo h1 { font-size: 2rem; font-weight: 800; background: var(--gradient); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+        .tagline { color: var(--text-muted); font-size: 0.9rem; margin-bottom: 2.5rem; }
+
+        /* Mode cards */
+        .mode-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-bottom: 1.5rem; }
+
+        .mode-card {
+            background: var(--accent-dim);
+            border: 1.5px solid var(--border);
+            border-radius: 18px;
+            padding: 1.5rem 1rem;
+            cursor: pointer;
+            transition: border-color 0.2s, box-shadow 0.2s, transform 0.15s;
+            user-select: none;
+        }
+        .mode-card:hover { border-color: var(--accent); box-shadow: 0 0 18px var(--accent-glow); transform: translateY(-2px); }
+        .mode-card.active { border-color: var(--accent); box-shadow: 0 0 22px var(--accent-glow); }
+        .mode-card .mode-icon { stroke: var(--accent); width: 28px; height: 28px; margin-bottom: 0.6rem; }
+        .mode-card h3 { font-size: 0.9rem; font-weight: 600; margin-bottom: 0.3rem; color: var(--text); }
+        .mode-card p  { font-size: 0.75rem; color: var(--text-muted); line-height: 1.4; }
+
+        /* Credential form */
+        #credForm { display: none; text-align: left; margin-bottom: 1.5rem; }
+        #credForm.visible { display: block; }
+
+        .form-row { margin-bottom: 1rem; }
+        .form-row label { display: block; font-size: 0.78rem; font-weight: 600; color: var(--text-muted); margin-bottom: 0.4rem; text-transform: uppercase; letter-spacing: 0.06em; }
+        .form-row input {
+            width: 100%;
+            background: rgba(56,189,248,0.07);
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            padding: 0.65rem 0.9rem;
+            color: var(--text);
+            font-size: 0.88rem;
+            font-family: inherit;
+            outline: none;
+            transition: border-color 0.2s;
+        }
+        .form-row input:focus { border-color: var(--accent); }
+        .form-row input::placeholder { color: var(--text-muted); opacity: 0.55; }
+
+        .help-text { font-size: 0.72rem; color: var(--text-muted); margin-top: 0.3rem; line-height: 1.4; opacity: 0.8; }
+
+        /* Sample account info */
+        #sampleInfo { display: none; text-align: left; margin-bottom: 1.5rem; }
+        #sampleInfo.visible { display: block; }
+        .sample-card {
+            background: var(--accent-dim);
+            border: 1px solid var(--border);
+            border-radius: 14px;
+            padding: 1.1rem 1.2rem;
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+        }
+        .sample-avatar {
+            width: 48px; height: 48px;
+            border-radius: 50%;
+            border: 2px solid var(--accent);
+            object-fit: cover;
+            flex-shrink: 0;
+            background: var(--accent-dim);
+        }
+        .sample-avatar-placeholder { width: 48px; height: 48px; border-radius: 50%; border: 2px solid var(--accent); display: flex; align-items: center; justify-content: center; flex-shrink: 0; background: var(--accent-dim); }
+        .sample-avatar-placeholder svg { stroke: var(--accent); width: 22px; height: 22px; }
+        .sample-info h4 { font-size: 0.95rem; font-weight: 700; color: var(--text); }
+        .sample-info p  { font-size: 0.78rem; color: var(--text-muted); margin-top: 0.2rem; }
+        .badge-sample { display: inline-block; background: var(--accent-dim); border: 1px solid var(--accent); color: var(--accent); border-radius: 20px; font-size: 0.68rem; font-weight: 600; padding: 0.15rem 0.55rem; margin-top: 0.3rem; }
+
+        /* CTA Button */
+        .btn-cta {
+            width: 100%;
+            background: var(--gradient);
+            border: none;
+            border-radius: 14px;
+            padding: 0.9rem 1.5rem;
+            font-size: 1rem;
+            font-weight: 700;
+            color: #fff;
+            cursor: pointer;
+            transition: opacity 0.2s, transform 0.15s;
+            letter-spacing: 0.02em;
+            box-shadow: 0 4px 20px var(--accent-glow);
+        }
+        .btn-cta:hover { opacity: 0.9; transform: translateY(-1px); }
+        .btn-cta:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
+
+        .error-msg { color: var(--danger); font-size: 0.82rem; margin-top: 0.75rem; display: none; }
+        .error-msg.visible { display: block; }
+
+        .spinner { display: inline-block; width: 18px; height: 18px; border: 2px solid rgba(255,255,255,0.3); border-top-color: #fff; border-radius: 50%; animation: spin 0.7s linear infinite; vertical-align: middle; margin-right: 0.4rem; }
+        @keyframes spin { to { transform: rotate(360deg); } }
+
+        .divider { display: flex; align-items: center; gap: 1rem; margin: 1.5rem 0; color: var(--text-muted); font-size: 0.78rem; }
+        .divider::before, .divider::after { content: ''; flex: 1; border-top: 1px solid var(--border); }
+    </style>
+</head>
+<body>
+    <div class="blob blob-1"></div>
+    <div class="blob blob-2"></div>
+
+    <div class="card">
+        <div class="logo">
+            <i data-lucide="activity" class="logo-icon"></i>
+            <h1>AthleteIQ</h1>
+        </div>
+        <p class="tagline">AI-powered fitness intelligence for endurance athletes</p>
+
+        <div class="mode-grid">
+            <div class="mode-card" id="modeOwn" onclick="selectMode('own')">
+                <i data-lucide="key-round" class="mode-icon"></i>
+                <h3>My Account</h3>
+                <p>Connect your own Strava account with your credentials</p>
+            </div>
+            <div class="mode-card" id="modeSample" onclick="selectMode('sample')">
+                <i data-lucide="user-check" class="mode-icon"></i>
+                <h3>Sample Account</h3>
+                <p>Explore with a real athlete's data — no setup needed</p>
+            </div>
+        </div>
+
+        <!-- Own credentials form -->
+        <div id="credForm">
+            <div class="form-row">
+                <label>Strava Client ID</label>
+                <input type="text" id="clientId" placeholder="e.g. 123456" />
+                <p class="help-text">Found in your Strava API Application settings at strava.com/settings/api</p>
+            </div>
+            <div class="form-row">
+                <label>Strava Client Secret</label>
+                <input type="password" id="clientSecret" placeholder="••••••••••••••••" />
+            </div>
+            <div class="form-row">
+                <label>Access Token <span style="color:var(--accent)">*</span></label>
+                <input type="password" id="accessToken" placeholder="••••••••••••••••" />
+                <p class="help-text">Get a token at strava.com/settings/api — click "My API Application" and use the access token shown.</p>
+            </div>
+            <div class="form-row">
+                <label>Refresh Token</label>
+                <input type="password" id="refreshToken" placeholder="Optional — for auto-refresh" />
+            </div>
+        </div>
+
+        <!-- Sample account info -->
+        <div id="sampleInfo">
+            <div class="sample-card">
+                <div class="sample-avatar-placeholder">
+                    <i data-lucide="user" style="stroke:var(--accent);width:22px;height:22px"></i>
+                </div>
+                <div class="sample-info">
+                    <h4>Bhuvi's Account</h4>
+                    <p>Real Strava data — runs, stats &amp; AI insights</p>
+                    <span class="badge-sample">Read-only demo</span>
+                </div>
+            </div>
+        </div>
+
+        <button class="btn-cta" id="ctaBtn" onclick="handleLogin()" disabled>
+            Get Started
+        </button>
+        <p class="error-msg" id="errMsg"></p>
+    </div>
+
+    <script>
+        lucide.createIcons();
+
+        let selectedMode = null;
+
+        function selectMode(mode) {
+            selectedMode = mode;
+            document.getElementById('modeOwn').classList.toggle('active', mode === 'own');
+            document.getElementById('modeSample').classList.toggle('active', mode === 'sample');
+            document.getElementById('credForm').classList.toggle('visible', mode === 'own');
+            document.getElementById('sampleInfo').classList.toggle('visible', mode === 'sample');
+            document.getElementById('ctaBtn').disabled = false;
+            document.getElementById('ctaBtn').textContent = mode === 'sample' ? 'View Sample Dashboard' : 'Connect My Strava';
+            document.getElementById('errMsg').classList.remove('visible');
+        }
+
+        async function handleLogin() {
+            const btn = document.getElementById('ctaBtn');
+            const err = document.getElementById('errMsg');
+            err.classList.remove('visible');
+
+            if (!selectedMode) return;
+
+            btn.disabled = true;
+            btn.innerHTML = '<span class="spinner"></span>Connecting…';
+
+            try {
+                if (selectedMode === 'sample') {
+                    const res = await fetch('/api/auth/sample', { method: 'POST' });
+                    const data = await res.json();
+                    if (!res.ok) throw new Error(data.error || 'Failed');
+                    localStorage.setItem('athleteiq_mode', 'sample');
+                    window.location.href = '/';
+                } else {
+                    const accessToken  = document.getElementById('accessToken').value.trim();
+                    const refreshToken = document.getElementById('refreshToken').value.trim();
+                    const clientId     = document.getElementById('clientId').value.trim();
+                    const clientSecret = document.getElementById('clientSecret').value.trim();
+
+                    if (!accessToken) {
+                        throw new Error('Access Token is required');
+                    }
+
+                    const res = await fetch('/api/auth/configure', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ clientId, clientSecret, accessToken, refreshToken }),
+                    });
+                    const data = await res.json();
+                    if (!res.ok) throw new Error(data.error || 'Failed');
+                    localStorage.setItem('athleteiq_mode', 'own');
+                    window.location.href = '/';
+                }
+            } catch (e) {
+                err.textContent = e.message;
+                err.classList.add('visible');
+                btn.disabled = false;
+                btn.textContent = selectedMode === 'sample' ? 'View Sample Dashboard' : 'Connect My Strava';
+            }
+        }
+    </script>
+</body>
+</html>
