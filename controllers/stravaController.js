@@ -52,33 +52,103 @@ exports.getAthleteStats = async (req, res) => {
 
         try {
             const fourWeeksAgo = Math.floor(Date.now() / 1000) - (28 * 24 * 60 * 60);
-            const recentActs = await fetchFromStrava(`/athlete/activities?per_page=100&after=${fourWeeksAgo}`);
+            const [recentActs, allActs] = await Promise.all([
+                fetchFromStrava(`/athlete/activities?per_page=200&after=${fourWeeksAgo}`),
+                fetchFromStrava(`/athlete/activities?per_page=200`),
+            ]);
             await storeActivities(recentActs);
+
             const runs = recentActs.filter(a => RUN_TYPES.has(a.type));
+            const allRuns = allActs.filter(a => RUN_TYPES.has(a.type));
 
             stats.recent_run_totals = {
-                count: runs.length,
-                distance: runs.reduce((s, a) => s + a.distance, 0),
-                moving_time: runs.reduce((s, a) => s + a.moving_time, 0),
+                count:          runs.length,
+                distance:       runs.reduce((s, a) => s + a.distance, 0),
+                moving_time:    runs.reduce((s, a) => s + a.moving_time, 0),
                 elevation_gain: runs.reduce((s, a) => s + (a.total_elevation_gain || 0), 0),
             };
 
-            // Consistency: % of the 4 weeks that had at least one run
+            // ── Consistency ───────────────────────────────────────────────────
             const runWeeks = new Set(runs.map(a => {
                 const d = new Date(a.start_date);
-                return `${d.getFullYear()}-${d.getMonth()}-W${Math.ceil(d.getDate() / 7)}`;
+                const ws = new Date(d); ws.setDate(d.getDate() - d.getDay());
+                return ws.toISOString().slice(0, 10);
             }));
             const consistencyScore = Math.min(100, Math.round((runWeeks.size / 4) * 100));
 
-            // Avg suffer score from runs that have one
+            // ── Suffer score ──────────────────────────────────────────────────
             const sufferScores = runs.filter(r => r.suffer_score > 0).map(r => r.suffer_score);
             const avgSufferScore = sufferScores.length
                 ? Math.round(sufferScores.reduce((s, v) => s + v, 0) / sufferScores.length)
                 : null;
 
-            stats.computed = { consistencyScore, avgSufferScore };
+            // ── Best pace (min/km) ────────────────────────────────────────────
+            const paceRuns = allRuns.filter(a => a.distance > 1000 && a.moving_time > 0);
+            let bestPace = null, bestPaceActivity = null;
+            for (const a of paceRuns) {
+                const p = (a.moving_time / 60) / (a.distance / 1000);
+                if (!bestPace || p < bestPace) { bestPace = p; bestPaceActivity = a; }
+            }
+            const fmtPace = (p) => {
+                if (!p) return null;
+                const m = Math.floor(p), s = Math.round((p - m) * 60);
+                return `${m}:${String(s).padStart(2,'0')}`;
+            };
+
+            // ── Heart rate ────────────────────────────────────────────────────
+            const hrRuns = allRuns.filter(a => a.average_heartrate);
+            const avgHR  = hrRuns.length
+                ? Math.round(hrRuns.reduce((s, a) => s + a.average_heartrate, 0) / hrRuns.length)
+                : null;
+            const maxHR  = hrRuns.length
+                ? Math.round(Math.max(...hrRuns.map(a => a.max_heartrate || a.average_heartrate)))
+                : null;
+
+            // ── Longest run ───────────────────────────────────────────────────
+            const longestRun = allRuns.reduce((best, a) =>
+                (!best || a.distance > best.distance) ? a : best, null);
+
+            // ── PRs & achievements ────────────────────────────────────────────
+            const totalPRs          = allActs.reduce((s, a) => s + (a.pr_count || 0), 0);
+            const totalAchievements = allActs.reduce((s, a) => s + (a.achievement_count || 0), 0);
+
+            // ── Avg weekly km (last 4 weeks) ──────────────────────────────────
+            const avgWeeklyKm = parseFloat((
+                runs.reduce((s, a) => s + a.distance, 0) / 1000 / 4
+            ).toFixed(1));
+
+            // ── Sport breakdown ───────────────────────────────────────────────
+            const sportBreakdown = {};
+            for (const a of allActs) sportBreakdown[a.type] = (sportBreakdown[a.type] || 0) + 1;
+
+            // ── Elevation (YTD + recent 4w) ───────────────────────────────────
+            const recentElevation = runs.reduce((s, a) => s + (a.total_elevation_gain || 0), 0);
+
+            stats.computed = {
+                consistencyScore,
+                avgSufferScore,
+                bestPace:          fmtPace(bestPace),
+                bestPaceActivity:  bestPaceActivity ? {
+                    name: bestPaceActivity.name,
+                    date: bestPaceActivity.start_date?.slice(0, 10),
+                    distKm: parseFloat((bestPaceActivity.distance / 1000).toFixed(2)),
+                } : null,
+                avgHR,
+                maxHR,
+                longestRun: longestRun ? {
+                    name:   longestRun.name,
+                    date:   longestRun.start_date?.slice(0, 10),
+                    distKm: parseFloat((longestRun.distance / 1000).toFixed(2)),
+                } : null,
+                totalPRs,
+                totalAchievements,
+                avgWeeklyKm,
+                recentElevation: Math.round(recentElevation),
+                sportBreakdown,
+            };
         } catch (e) {
-            console.error('[Stats] Failed to recompute recent runs:', e.message);
+            console.error('[Stats] Failed to compute rich stats:', e.message);
+            stats.computed = {};
         }
 
         res.json(stats);

@@ -45,18 +45,33 @@
         </header>
 
         <main>
+            <!-- ── Athlete Profile Card ─────────────────────────────────────── -->
+            <div id="athleteProfileCard" class="athlete-profile-card glass-panel hidden">
+                <div class="athlete-profile-left">
+                    <img id="athleteAvatar" src="" alt="Profile" class="athlete-avatar-lg" />
+                    <div class="athlete-meta">
+                        <h2 id="athleteFullName" class="athlete-name skeleton-text">&nbsp;</h2>
+                        <p id="athleteLocation" class="athlete-location"></p>
+                        <p id="athleteBio" class="athlete-bio"></p>
+                        <div id="athleteBadges" class="athlete-badges"></div>
+                    </div>
+                </div>
+                <div id="athleteSportBreakdown" class="athlete-sport-breakdown"></div>
+            </div>
+
+            <!-- ── All-Time Stats ────────────────────────────────────────────── -->
             <section class="overview">
-                <h2 class="section-title">Running Overview <span class="badge">Performance Metrics</span></h2>
+                <h2 class="section-title">All-Time Stats <span class="badge">Running</span></h2>
                 <div class="stats-grid">
                     <div class="stat-card glass-panel" id="stat-activities">
                         <i data-lucide="footprints" class="stat-icon"></i>
                         <h3 class="stat-value skeleton-text">&nbsp;</h3>
-                        <p class="stat-label">Total Activities</p>
+                        <p class="stat-label">Total Runs</p>
                     </div>
                     <div class="stat-card glass-panel" id="stat-distance">
                         <i data-lucide="route" class="stat-icon"></i>
                         <h3 class="stat-value skeleton-text">&nbsp;</h3>
-                        <p class="stat-label">Distance (km)</p>
+                        <p class="stat-label">Total Distance (km)</p>
                     </div>
                     <div class="stat-card glass-panel" id="stat-time">
                         <i data-lucide="timer" class="stat-icon"></i>
@@ -66,12 +81,51 @@
                     <div class="stat-card glass-panel" id="stat-elevation">
                         <i data-lucide="mountain" class="stat-icon"></i>
                         <h3 class="stat-value skeleton-text">&nbsp;</h3>
-                        <p class="stat-label">Elevation Gain (m)</p>
+                        <p class="stat-label">Total Elevation (m)</p>
+                    </div>
+                    <div class="stat-card glass-panel" id="stat-prs">
+                        <i data-lucide="trophy" class="stat-icon"></i>
+                        <h3 class="stat-value skeleton-text">&nbsp;</h3>
+                        <p class="stat-label">Personal Records</p>
+                    </div>
+                    <div class="stat-card glass-panel" id="stat-achievements">
+                        <i data-lucide="award" class="stat-icon"></i>
+                        <h3 class="stat-value skeleton-text">&nbsp;</h3>
+                        <p class="stat-label">Achievements</p>
+                    </div>
+                </div>
+            </section>
+
+            <!-- ── Personal Bests ────────────────────────────────────────────── -->
+            <section class="overview">
+                <h2 class="section-title">Personal Bests</h2>
+                <div class="stats-grid">
+                    <div class="stat-card glass-panel" id="stat-bestpace">
+                        <i data-lucide="zap" class="stat-icon"></i>
+                        <h3 class="stat-value skeleton-text">&nbsp;</h3>
+                        <p class="stat-label">Best Pace (min/km)</p>
+                        <p class="stat-sub" id="stat-bestpace-sub"></p>
+                    </div>
+                    <div class="stat-card glass-panel" id="stat-longestrun">
+                        <i data-lucide="map" class="stat-icon"></i>
+                        <h3 class="stat-value skeleton-text">&nbsp;</h3>
+                        <p class="stat-label">Longest Run (km)</p>
+                        <p class="stat-sub" id="stat-longestrun-sub"></p>
+                    </div>
+                    <div class="stat-card glass-panel" id="stat-avghr">
+                        <i data-lucide="heart-pulse" class="stat-icon"></i>
+                        <h3 class="stat-value skeleton-text">&nbsp;</h3>
+                        <p class="stat-label">Avg Heart Rate (bpm)</p>
+                    </div>
+                    <div class="stat-card glass-panel" id="stat-maxhr">
+                        <i data-lucide="heart" class="stat-icon"></i>
+                        <h3 class="stat-value skeleton-text">&nbsp;</h3>
+                        <p class="stat-label">Max Heart Rate (bpm)</p>
                     </div>
                     <div class="stat-card glass-panel" id="stat-consistency">
                         <i data-lucide="calendar-check" class="stat-icon"></i>
                         <h3 class="stat-value skeleton-text">&nbsp;</h3>
-                        <p class="stat-label">Consistency Score</p>
+                        <p class="stat-label">Consistency (4-week)</p>
                     </div>
                     <div class="stat-card glass-panel" id="stat-intensity">
                         <i data-lucide="flame" class="stat-icon"></i>
@@ -81,38 +135,36 @@
                 </div>
             </section>
 
-            <section class="recent">
-                <h2 class="section-title">Recent Running (Last 4 Weeks)</h2>
-                <div class="recent-grid">
-                    <div class="stat-row glass-panel">
-                        <span class="row-label">Distance</span>
-                        <span class="row-value skeleton-text" id="recent-dist">&nbsp;</span>
+            <!-- ── This Year (YTD) + Last 4 Weeks ───────────────────────────── -->
+            <section class="overview">
+                <h2 class="section-title">Period Breakdown</h2>
+                <div class="period-grid">
+                    <div class="period-card glass-panel">
+                        <p class="period-title"><i data-lucide="calendar" style="width:15px;height:15px;vertical-align:middle;margin-right:5px;stroke:var(--accent)"></i>This Year (YTD)</p>
+                        <div class="period-stats">
+                            <div class="period-row"><span>Runs</span><span id="ytd-count" class="skeleton-text">&nbsp;</span></div>
+                            <div class="period-row"><span>Distance</span><span id="ytd-dist" class="skeleton-text">&nbsp;</span></div>
+                            <div class="period-row"><span>Moving Time</span><span id="ytd-time" class="skeleton-text">&nbsp;</span></div>
+                            <div class="period-row"><span>Elevation</span><span id="ytd-elev" class="skeleton-text">&nbsp;</span></div>
+                        </div>
                     </div>
-                    <div class="stat-row glass-panel">
-                        <span class="row-label">Moving Time</span>
-                        <span class="row-value skeleton-text" id="recent-time">&nbsp;</span>
+                    <div class="period-card glass-panel">
+                        <p class="period-title"><i data-lucide="clock" style="width:15px;height:15px;vertical-align:middle;margin-right:5px;stroke:var(--accent)"></i>Last 4 Weeks</p>
+                        <div class="period-stats">
+                            <div class="period-row"><span>Runs</span><span id="recent-count" class="skeleton-text">&nbsp;</span></div>
+                            <div class="period-row"><span>Distance</span><span id="recent-dist" class="skeleton-text">&nbsp;</span></div>
+                            <div class="period-row"><span>Moving Time</span><span id="recent-time" class="skeleton-text">&nbsp;</span></div>
+                            <div class="period-row"><span>Avg / Week</span><span id="recent-weekly" class="skeleton-text">&nbsp;</span></div>
+                            <div class="period-row"><span>Elevation</span><span id="recent-elev" class="skeleton-text">&nbsp;</span></div>
+                        </div>
                     </div>
-                    <div class="stat-row glass-panel">
-                        <span class="row-label">Number of Runs</span>
-                        <span class="row-value skeleton-text" id="recent-count">&nbsp;</span>
-                    </div>
-                </div>
-            </section>
-
-            <section class="ytd">
-                <h2 class="section-title">Year to Date (YTD)</h2>
-                <div class="recent-grid">
-                    <div class="stat-row glass-panel">
-                        <span class="row-label">Distance</span>
-                        <span class="row-value skeleton-text" id="ytd-dist">&nbsp;</span>
-                    </div>
-                    <div class="stat-row glass-panel">
-                        <span class="row-label">Moving Time</span>
-                        <span class="row-value skeleton-text" id="ytd-time">&nbsp;</span>
-                    </div>
-                    <div class="stat-row glass-panel">
-                        <span class="row-label">Number of Runs</span>
-                        <span class="row-value skeleton-text" id="ytd-count">&nbsp;</span>
+                    <div class="period-card glass-panel">
+                        <p class="period-title"><i data-lucide="bike" style="width:15px;height:15px;vertical-align:middle;margin-right:5px;stroke:var(--accent)"></i>YTD Cycling</p>
+                        <div class="period-stats">
+                            <div class="period-row"><span>Rides</span><span id="ytd-rides-count" class="skeleton-text">&nbsp;</span></div>
+                            <div class="period-row"><span>Distance</span><span id="ytd-rides-dist" class="skeleton-text">&nbsp;</span></div>
+                            <div class="period-row"><span>Moving Time</span><span id="ytd-rides-time" class="skeleton-text">&nbsp;</span></div>
+                        </div>
                     </div>
                 </div>
             </section>

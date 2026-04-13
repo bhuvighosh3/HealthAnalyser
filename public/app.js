@@ -28,64 +28,120 @@ document.addEventListener('DOMContentLoaded', async () => {
 });
 
 function renderProfile(athlete) {
+    // Header mini-profile
     const container = document.getElementById('profileContainer');
     const locationStr = [athlete.city, athlete.country].filter(Boolean).join(', ');
-
     container.innerHTML = `
-        <img src="${athlete.profile_medium || 'https://via.placeholder.com/50'}" alt="Profile" class="avatar">
+        <img src="${athlete.profile_medium || ''}" alt="Profile" class="avatar">
         <div class="profile-info">
             <span class="user-name">${athlete.firstname} ${athlete.lastname}</span>
             <span class="location">${locationStr || 'Strava Athlete'}</span>
         </div>
     `;
+
+    // Large profile card
+    const card = document.getElementById('athleteProfileCard');
+    document.getElementById('athleteAvatar').src = athlete.profile || athlete.profile_medium || '';
+    document.getElementById('athleteFullName').innerText = `${athlete.firstname} ${athlete.lastname}`;
+    document.getElementById('athleteFullName').classList.remove('skeleton-text');
+
+    const loc = [athlete.city, athlete.state, athlete.country].filter(Boolean).join(', ');
+    document.getElementById('athleteLocation').innerText = loc || '';
+
+    const bio = typeof athlete.bio === 'string' ? athlete.bio.trim() : '';
+    const bioEl = document.getElementById('athleteBio');
+    bioEl.innerText = bio || '';
+    bioEl.style.display = bio ? 'block' : 'none';
+
+    const badges = [];
+    if (athlete.premium || athlete.summit) badges.push('<span class="profile-badge summit">Summit</span>');
+    if (athlete.sex)    badges.push(`<span class="profile-badge">${athlete.sex === 'M' ? 'Male' : athlete.sex === 'F' ? 'Female' : athlete.sex}</span>`);
+    if (athlete.username) badges.push(`<span class="profile-badge">@${athlete.username}</span>`);
+    document.getElementById('athleteBadges').innerHTML = badges.join('');
+
+    card.classList.remove('hidden');
 }
 
 function renderStats(stats) {
-    // Utilities
-    const formatDistance = (meters) => (meters / 1000).toFixed(1);
-    const formatTime = (seconds) => (seconds / 3600).toFixed(1);
+    const fmtKm   = (m)  => (m / 1000).toFixed(1) + ' km';
+    const fmtHrs  = (s)  => (s / 3600).toFixed(1) + ' hrs';
+    const fmtElev = (m)  => Math.round(m) + ' m';
+    const set     = (id, val) => {
+        const el = document.getElementById(id);
+        if (el) { el.innerText = val ?? '—'; el.classList.remove('skeleton-text'); }
+    };
+    const setCard = (id, val) => {
+        const el = document.querySelector(`${id} .stat-value`);
+        if (el) { el.innerText = val ?? '—'; el.classList.remove('skeleton-text'); }
+    };
 
-    // --- All Time Runs ---
-    const allRuns = stats.all_run_totals || { count: 0, distance: 0, moving_time: 0, elevation_gain: 0 };
+    // ── All-Time Runs ─────────────────────────────────────────────────────────
+    const allR = stats.all_run_totals || {};
+    setCard('#stat-activities',  allR.count     ?? '—');
+    setCard('#stat-distance',    allR.distance  ? (allR.distance/1000).toFixed(0) : '—');
+    setCard('#stat-time',        allR.moving_time ? (allR.moving_time/3600).toFixed(0) : '—');
+    setCard('#stat-elevation',   allR.elevation_gain ? Math.round(allR.elevation_gain).toLocaleString() : '—');
 
-    document.querySelector('#stat-activities .stat-value').innerText = allRuns.count;
-    document.querySelector('#stat-distance .stat-value').innerText = formatDistance(allRuns.distance);
-    document.querySelector('#stat-time .stat-value').innerText = formatTime(allRuns.moving_time);
-    document.querySelector('#stat-elevation .stat-value').innerText = Math.round(allRuns.elevation_gain);
+    // ── PRs & Achievements ────────────────────────────────────────────────────
+    const c = stats.computed || {};
+    setCard('#stat-prs',          c.totalPRs          ?? '—');
+    setCard('#stat-achievements', c.totalAchievements ?? '—');
 
-    removeSkeleton('#stat-activities');
-    removeSkeleton('#stat-distance');
-    removeSkeleton('#stat-time');
-    removeSkeleton('#stat-elevation');
+    // ── Personal Bests ────────────────────────────────────────────────────────
+    setCard('#stat-bestpace',   c.bestPace    ?? '—');
+    setCard('#stat-longestrun', c.longestRun  ? c.longestRun.distKm : '—');
+    setCard('#stat-avghr',      c.avgHR       ? c.avgHR + ' bpm' : '—');
+    setCard('#stat-maxhr',      c.maxHR       ? c.maxHR + ' bpm' : '—');
+    setCard('#stat-consistency', c.consistencyScore != null ? c.consistencyScore + '%' : '—');
+    setCard('#stat-intensity',   c.avgSufferScore    ?? '—');
 
-    // Consistency + Suffer Score (computed server-side from recent activities)
-    const computed = stats.computed || {};
-    document.querySelector('#stat-consistency .stat-value').innerText =
-        computed.consistencyScore != null ? computed.consistencyScore + '%' : '—';
-    document.querySelector('#stat-intensity .stat-value').innerText =
-        computed.avgSufferScore != null ? computed.avgSufferScore : '—';
-    removeSkeleton('#stat-consistency');
-    removeSkeleton('#stat-intensity');
+    // Sub-labels for best pace and longest run
+    if (c.bestPaceActivity) {
+        const sub = document.getElementById('stat-bestpace-sub');
+        if (sub) sub.innerText = `"${c.bestPaceActivity.name}" · ${c.bestPaceActivity.distKm} km`;
+    }
+    if (c.longestRun) {
+        const sub = document.getElementById('stat-longestrun-sub');
+        if (sub) sub.innerText = `"${c.longestRun.name}" · ${c.longestRun.date}`;
+    }
 
-    // --- Recent Runs (4 weeks) ---
-    const recentRuns = stats.recent_run_totals || { distance: 0, moving_time: 0, count: 0 };
-    document.getElementById('recent-dist').innerText = `${formatDistance(recentRuns.distance)} km`;
-    document.getElementById('recent-time').innerText = `${formatTime(recentRuns.moving_time)} hours`;
-    document.getElementById('recent-count').innerText = recentRuns.count;
+    // ── YTD Runs ──────────────────────────────────────────────────────────────
+    const ytd = stats.ytd_run_totals || {};
+    set('ytd-count', ytd.count ?? '—');
+    set('ytd-dist',  ytd.distance  ? fmtKm(ytd.distance)  : '—');
+    set('ytd-time',  ytd.moving_time ? fmtHrs(ytd.moving_time) : '—');
+    set('ytd-elev',  ytd.elevation_gain != null ? fmtElev(ytd.elevation_gain) : '—');
 
-    removeSkeleton('#recent-dist');
-    removeSkeleton('#recent-time');
-    removeSkeleton('#recent-count');
+    // ── Recent 4-week Runs ────────────────────────────────────────────────────
+    const rec = stats.recent_run_totals || {};
+    set('recent-count',  rec.count ?? '—');
+    set('recent-dist',   rec.distance   ? fmtKm(rec.distance)   : '—');
+    set('recent-time',   rec.moving_time ? fmtHrs(rec.moving_time) : '—');
+    set('recent-weekly', c.avgWeeklyKm  != null ? c.avgWeeklyKm + ' km' : '—');
+    set('recent-elev',   c.recentElevation != null ? fmtElev(c.recentElevation) : '—');
 
-    // --- YTD Runs ---
-    const ytdRuns = stats.ytd_run_totals || { distance: 0, moving_time: 0, count: 0 };
-    document.getElementById('ytd-dist').innerText = `${formatDistance(ytdRuns.distance)} km`;
-    document.getElementById('ytd-time').innerText = `${formatTime(ytdRuns.moving_time)} hours`;
-    document.getElementById('ytd-count').innerText = ytdRuns.count;
+    // ── YTD Cycling ───────────────────────────────────────────────────────────
+    const rides = stats.ytd_ride_totals || {};
+    set('ytd-rides-count', rides.count     ?? '0');
+    set('ytd-rides-dist',  rides.distance  ? fmtKm(rides.distance)      : '0 km');
+    set('ytd-rides-time',  rides.moving_time ? fmtHrs(rides.moving_time) : '0 hrs');
 
-    removeSkeleton('#ytd-dist');
-    removeSkeleton('#ytd-time');
-    removeSkeleton('#ytd-count');
+    // ── Sport breakdown in profile card ───────────────────────────────────────
+    if (c.sportBreakdown) {
+        const container = document.getElementById('athleteSportBreakdown');
+        if (container) {
+            const icons = { Run:'footprints', Ride:'bike', Walk:'person-standing', Hike:'mountain', Swim:'waves', VirtualRun:'monitor' };
+            container.innerHTML = Object.entries(c.sportBreakdown)
+                .sort((a,b) => b[1]-a[1])
+                .map(([type, count]) => `
+                    <div class="sport-item">
+                        <i data-lucide="${icons[type] || 'activity'}" class="sport-icon"></i>
+                        <span class="sport-count">${count}</span>
+                        <span class="sport-label">${type}</span>
+                    </div>`).join('');
+            lucide.createIcons();
+        }
+    }
 }
 
 function removeSkeleton(selector) {
