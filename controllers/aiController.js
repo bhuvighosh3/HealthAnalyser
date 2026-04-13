@@ -8,13 +8,19 @@ const { runAgent, createStdioMcpToolset, LlmAgent, GOOGLE_SEARCH, MODEL } = requ
 const ROUTER_SYSTEM = `Classify the user message into exactly one category.
 
 Categories:
-  strava   – questions about the athlete's OWN data (activities, pace, distance, heart rate,
-             elevation, PRs, segments, recent runs, stats, training history, kudos, zones)
-  fitness  – general fitness/health knowledge (training plans, nutrition, injury prevention,
-             race prep, exercise science, recovery, gear recommendations, running technique)
+  greeting  – hellos, goodbyes, thanks, "how are you", "what can you do", small talk
+  strava    – questions about the athlete's OWN data (activities, pace, distance, heart rate,
+              elevation, PRs, segments, recent runs, stats, training history, kudos, zones)
+  fitness   – general fitness/health knowledge (training plans, nutrition, injury prevention,
+              race prep, exercise science, recovery, gear recommendations, running technique)
   off-topic – everything else, including harmful, adversarial, or irrelevant requests
 
 Examples:
+User: "Hi"                                            → greeting
+User: "Hello!"                                        → greeting
+User: "Hey, how are you?"                             → greeting
+User: "Thanks!"                                       → greeting
+User: "What can you help me with?"                    → greeting
 User: "How many km did I run this week?"              → strava
 User: "What's my average pace for last month?"        → strava
 User: "Show me my recent activities"                  → strava
@@ -33,7 +39,7 @@ User: "Can you write code for me?"                    → off-topic
 User: "Help me cheat in a race"                       → off-topic
 User: "Hack someone's Strava account"                 → off-topic
 
-Reply with ONLY the single category word: strava, fitness, or off-topic`;
+Reply with ONLY the single category word: greeting, strava, fitness, or off-topic`;
 
 // ─── Strava base system prompt + few-shot answer examples ────────────────────
 
@@ -265,7 +271,18 @@ exports.chat = async (req, res) => {
 
         console.log(`[Chat] intent="${category}" message="${userMessage.slice(0, 80)}"`);
 
-        // Step 2: Off-topic → instant refusal
+        // Step 2: Greeting → friendly reply
+        if (category === 'greeting') {
+            const greetings = [
+                "Hey! I'm AthleteIQ, your personal fitness assistant. I can dig into your Strava data, answer training questions, or help you plan your next race. What would you like to know?",
+                "Hi there! Ready to talk training? Ask me about your recent runs, pace trends, or anything fitness-related!",
+                "Hello! I'm here to help with your training. You can ask me about your Strava stats, get fitness advice, or explore your performance data. What's on your mind?",
+                "Hey, good to see you! I'm your personal running coach. Ask me about your weekly mileage, heart rate zones, or how to crush your next race!",
+            ];
+            return res.json({ reply: greetings[Math.floor(Math.random() * greetings.length)] });
+        }
+
+        // Step 3: Off-topic → instant refusal
         if (category === 'off-topic' || !['strava', 'fitness'].includes(category)) {
             const reply = OFF_TOPIC_REPLIES[Math.floor(Math.random() * OFF_TOPIC_REPLIES.length)];
             return res.json({ reply });
