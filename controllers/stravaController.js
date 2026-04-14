@@ -2,33 +2,52 @@ const { fetchFromStrava, exchangeToken } = require('../services/stravaService');
 const { storeActivities, RUN_TYPES } = require('../db/database');
 
 exports.authorize = (req, res) => {
-    const clientId = process.env.STRAVA_CLIENT_ID;
+    const profile = (req.query.profile || '').toLowerCase();
+    const clientId = profile === 'rishit'
+        ? process.env.RISHIT_CLIENT_ID
+        : process.env.STRAVA_CLIENT_ID;
     const host = process.env.APP_URL || `http://${req.headers.host}`;
     const redirectUri = `${host}/exchange_token`;
-    const authUrl = `http://www.strava.com/oauth/authorize?client_id=${clientId}&response_type=code&redirect_uri=${encodeURIComponent(redirectUri)}&approval_prompt=force&scope=activity:read_all,read`;
+    const state = profile === 'rishit' ? '&state=rishit' : '';
+    const authUrl = `http://www.strava.com/oauth/authorize?client_id=${clientId}&response_type=code&redirect_uri=${encodeURIComponent(redirectUri)}&approval_prompt=force&scope=activity:read_all,read${state}`;
     res.redirect(authUrl);
 };
 
 exports.exchangeToken = async (req, res) => {
     const code = req.query.code;
+    const profile = (req.query.state || '').toLowerCase();
     if (!code) return res.send("Authorization failed!");
 
     try {
-        const tokenData = await exchangeToken(code);
+        const tokenData = await exchangeToken(code, profile);
         if (tokenData.access_token) {
-            // Re-init DB with new tokens
-            const { initDatabase, updateEnv } = require('../db/database');
-            const { updateEnv: updateTokens } = require('../services/stravaService');
-            updateTokens({
-                STRAVA_ACCESS_TOKEN: tokenData.access_token,
-                STRAVA_REFRESH_TOKEN: tokenData.refresh_token,
-                STRAVA_EXPIRES_AT: tokenData.expires_at
-            });
-            await initDatabase();
+            const { updateEnv: updateTokens, PROFILE_TOKENS } = require('../services/stravaService');
+
+            if (profile === 'rishit') {
+                // Update Rishit's in-memory profile tokens
+                PROFILE_TOKENS.rishit.ACCESS_TOKEN  = tokenData.access_token;
+                PROFILE_TOKENS.rishit.REFRESH_TOKEN = tokenData.refresh_token;
+                PROFILE_TOKENS.rishit.EXPIRES_AT    = String(tokenData.expires_at);
+                // Persist to .env
+                updateTokens({
+                    RISHIT_ACCESS_TOKEN:  tokenData.access_token,
+                    RISHIT_REFRESH_TOKEN: tokenData.refresh_token,
+                    RISHIT_EXPIRES_AT:    tokenData.expires_at,
+                });
+            } else {
+                // Re-init DB with new tokens
+                const { initDatabase } = require('../db/database');
+                updateTokens({
+                    STRAVA_ACCESS_TOKEN:  tokenData.access_token,
+                    STRAVA_REFRESH_TOKEN: tokenData.refresh_token,
+                    STRAVA_EXPIRES_AT:    tokenData.expires_at,
+                });
+                await initDatabase();
+            }
 
             res.send(`
                 <h2>✅ Authentication Successful!</h2>
-                <p>We've securely saved your access and refresh tokens. The server will now auto-refresh them when they expire.</p>
+                <p>Tokens saved for ${profile === 'rishit' ? 'Rishit' : 'your account'}. The server will auto-refresh them when they expire.</p>
                 <a href="/">Go back to your Dashboard</a>
             `);
         } else {

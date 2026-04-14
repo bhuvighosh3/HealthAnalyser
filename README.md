@@ -129,7 +129,7 @@ flowchart TD
 | Second data retrieval | ✅ | Google Search grounding (fitness chat) + Firecrawl search (nutrition RAG) |
 | Iterative refinement loop | ✅ | ADK `runAgent` event loop; EDA FunctionTool; Calendar MCPToolset multi-round |
 | RAG | ✅ | Firecrawl → Vertex AI embeddings → Firestore vector store → `findNearest` semantic search → Nutrition Agent |
-| Login / multi-account | ✅ | Login page with own-credentials mode and sample account (Bhuvi's real data) |
+| Login / multi-account | ✅ | Login page with own-credentials mode and two sample profiles with real data |
 
 ---
 
@@ -140,7 +140,8 @@ The app starts with a login screen (`/login.html`) offering two modes:
 | Mode | Description |
 |---|---|
 | **My Account** | Enter your own Strava Client ID, Client Secret, Access Token, and Refresh Token. The server switches to your account live. |
-| **Sample Account** | Use Bhuvi's real Strava data — no setup needed. |
+| **Sample Profile 1** | Real Strava data — no setup needed. |
+| **Sample Profile 2** | Real Strava data — no setup needed. |
 
 Session is stored in `localStorage`. A **Logout** button in the header clears the session and returns to login.
 
@@ -200,8 +201,8 @@ sequenceDiagram
     Strava-->>Server: access_token + refresh_token + expires_at
     Server->>Server: Persist tokens to .env
 
-    Note over Server: On every API call
-    Server->>Server: ensureValidToken()
+    Note over Server: On every API call (both profiles)
+    Server->>Server: ensureValidToken() / ensureValidProfileToken()
     alt token expires within 1 hour
         Server->>Strava: POST /oauth/token (refresh)
         Strava-->>Server: new access_token
@@ -222,11 +223,20 @@ npm install   # postinstall automatically patches strava-mcp-server weight field
 
 ### 2. Environment variables — `.env`
 ```env
+# Sample Profile 1 (primary Strava account)
 STRAVA_CLIENT_ID=...
 STRAVA_CLIENT_SECRET=...
 STRAVA_ACCESS_TOKEN=
 STRAVA_REFRESH_TOKEN=
 STRAVA_EXPIRES_AT=
+
+# Sample Profile 2 (second Strava account)
+RISHIT_CLIENT_ID=...
+RISHIT_CLIENT_SECRET=...
+RISHIT_ACCESS_TOKEN=
+RISHIT_REFRESH_TOKEN=
+RISHIT_EXPIRES_AT=
+
 GCP_PROJECT_ID=your_gcp_project
 GCP_LOCATION=us-central1
 GOOGLE_OAUTH_CREDENTIALS=/absolute/path/to/gcp-oauth.keys.json  # optional (Calendar)
@@ -236,7 +246,8 @@ FIRECRAWL_API_KEY=fc-...                                          # for Nutritio
 ### 3. Strava OAuth
 ```bash
 npm start
-# Visit http://localhost:3000/auth
+# Sample Profile 1: http://localhost:3000/auth
+# Sample Profile 2: http://localhost:3000/auth?profile=rishit
 ```
 
 ### 4. Google Calendar (optional)
