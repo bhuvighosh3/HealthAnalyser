@@ -9,6 +9,7 @@ const nutritionController = require('../controllers/nutritionController');
 const authController      = require('../controllers/authController');
 
 // Auth Routes
+router.get( '/auth/profiles',  authController.getProfiles);
 router.post('/auth/configure', authController.configure);
 router.post('/auth/sample',    authController.useSample);
 

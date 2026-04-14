@@ -32,7 +32,7 @@
             display: flex;
             align-items: center;
             justify-content: center;
-            overflow: hidden;
+            overflow-x: hidden;
             position: relative;
             padding: 2rem 1rem;
         }
@@ -64,45 +64,106 @@
             box-shadow: var(--shadow);
             padding: 3rem 2.5rem;
             width: 100%;
-            max-width: 480px;
+            max-width: 520px;
             text-align: center;
         }
 
-        .logo { display: flex; align-items: center; justify-content: center; gap: 0.75rem; margin-bottom: 0.5rem; }
+        .logo { display: flex; align-items: center; justify-content: center; gap: 0.75rem; margin-bottom: 0.4rem; }
         .logo-icon { stroke: var(--accent); width: 40px; height: 40px; }
         .logo h1 { font-size: 2rem; font-weight: 800; background: var(--gradient); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
-        .tagline { color: var(--text-muted); font-size: 0.9rem; margin-bottom: 2.5rem; }
+        .tagline { color: var(--text-muted); font-size: 0.9rem; margin-bottom: 2rem; }
 
-        /* Mode cards */
-        .mode-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-bottom: 1.5rem; }
+        /* Section divider */
+        .section-label {
+            font-size: 0.72rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+            color: var(--text-muted);
+            margin-bottom: 0.75rem;
+            text-align: left;
+        }
+
+        /* ── Mode selector ─────────────────────────────────────────────── */
+        .mode-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0.9rem; margin-bottom: 1.5rem; }
 
         .mode-card {
             background: var(--accent-dim);
             border: 1.5px solid var(--border);
-            border-radius: 18px;
-            padding: 1.5rem 1rem;
+            border-radius: 16px;
+            padding: 1.2rem 0.9rem;
             cursor: pointer;
             transition: border-color 0.2s, box-shadow 0.2s, transform 0.15s;
             user-select: none;
+            text-align: center;
         }
-        .mode-card:hover { border-color: var(--accent); box-shadow: 0 0 18px var(--accent-glow); transform: translateY(-2px); }
+        .mode-card:hover  { border-color: var(--accent); box-shadow: 0 0 16px var(--accent-glow); transform: translateY(-2px); }
         .mode-card.active { border-color: var(--accent); box-shadow: 0 0 22px var(--accent-glow); }
-        .mode-card .mode-icon { stroke: var(--accent); width: 28px; height: 28px; margin-bottom: 0.6rem; }
-        .mode-card h3 { font-size: 0.9rem; font-weight: 600; margin-bottom: 0.3rem; color: var(--text); }
-        .mode-card p  { font-size: 0.75rem; color: var(--text-muted); line-height: 1.4; }
+        .mode-card .mode-icon { stroke: var(--accent); width: 26px; height: 26px; margin-bottom: 0.5rem; }
+        .mode-card h3 { font-size: 0.88rem; font-weight: 700; color: var(--text); margin-bottom: 0.2rem; }
+        .mode-card p  { font-size: 0.72rem; color: var(--text-muted); line-height: 1.4; }
 
-        /* Credential form */
-        #credForm { display: none; text-align: left; margin-bottom: 1.5rem; }
+        /* ── Sample profile cards ──────────────────────────────────────── */
+        #sampleProfiles { display: none; margin-bottom: 1.25rem; }
+        #sampleProfiles.visible { display: block; }
+
+        .profile-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0.9rem; }
+
+        .profile-card {
+            background: var(--accent-dim);
+            border: 1.5px solid var(--border);
+            border-radius: 14px;
+            padding: 1rem;
+            cursor: pointer;
+            transition: border-color 0.2s, box-shadow 0.2s, transform 0.15s;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 0.6rem;
+            text-align: center;
+            user-select: none;
+        }
+        .profile-card:hover  { border-color: var(--accent); box-shadow: 0 0 14px var(--accent-glow); transform: translateY(-2px); }
+        .profile-card.active { border-color: var(--accent); box-shadow: 0 0 20px var(--accent-glow); }
+
+        .profile-avatar {
+            width: 56px; height: 56px;
+            border-radius: 50%;
+            border: 2px solid var(--accent);
+            object-fit: cover;
+            background: rgba(56,189,248,0.1);
+        }
+        .profile-avatar-placeholder {
+            width: 56px; height: 56px;
+            border-radius: 50%;
+            border: 2px solid var(--accent);
+            display: flex; align-items: center; justify-content: center;
+            background: rgba(56,189,248,0.1);
+        }
+        .profile-info-name     { font-size: 0.9rem; font-weight: 700; color: var(--text); }
+        .profile-info-location { font-size: 0.72rem; color: var(--text-muted); }
+        .badge-demo {
+            display: inline-block;
+            background: var(--accent-dim);
+            border: 1px solid var(--accent);
+            color: var(--accent);
+            border-radius: 20px;
+            font-size: 0.65rem;
+            font-weight: 700;
+            padding: 0.12rem 0.5rem;
+        }
+
+        /* ── Own credentials form ──────────────────────────────────────── */
+        #credForm { display: none; text-align: left; margin-bottom: 1.25rem; }
         #credForm.visible { display: block; }
-
-        .form-row { margin-bottom: 1rem; }
-        .form-row label { display: block; font-size: 0.78rem; font-weight: 600; color: var(--text-muted); margin-bottom: 0.4rem; text-transform: uppercase; letter-spacing: 0.06em; }
+        .form-row { margin-bottom: 0.9rem; }
+        .form-row label { display: block; font-size: 0.75rem; font-weight: 700; color: var(--text-muted); margin-bottom: 0.35rem; text-transform: uppercase; letter-spacing: 0.06em; }
         .form-row input {
             width: 100%;
             background: rgba(56,189,248,0.07);
             border: 1px solid var(--border);
             border-radius: 10px;
-            padding: 0.65rem 0.9rem;
+            padding: 0.6rem 0.85rem;
             color: var(--text);
             font-size: 0.88rem;
             font-family: inherit;
@@ -110,61 +171,33 @@
             transition: border-color 0.2s;
         }
         .form-row input:focus { border-color: var(--accent); }
-        .form-row input::placeholder { color: var(--text-muted); opacity: 0.55; }
+        .form-row input::placeholder { color: var(--text-muted); opacity: 0.5; }
+        .help-text { font-size: 0.7rem; color: var(--text-muted); margin-top: 0.25rem; line-height: 1.4; opacity: 0.75; }
 
-        .help-text { font-size: 0.72rem; color: var(--text-muted); margin-top: 0.3rem; line-height: 1.4; opacity: 0.8; }
-
-        /* Sample account info */
-        #sampleInfo { display: none; text-align: left; margin-bottom: 1.5rem; }
-        #sampleInfo.visible { display: block; }
-        .sample-card {
-            background: var(--accent-dim);
-            border: 1px solid var(--border);
-            border-radius: 14px;
-            padding: 1.1rem 1.2rem;
-            display: flex;
-            align-items: center;
-            gap: 1rem;
-        }
-        .sample-avatar {
-            width: 48px; height: 48px;
-            border-radius: 50%;
-            border: 2px solid var(--accent);
-            object-fit: cover;
-            flex-shrink: 0;
-            background: var(--accent-dim);
-        }
-        .sample-avatar-placeholder { width: 48px; height: 48px; border-radius: 50%; border: 2px solid var(--accent); display: flex; align-items: center; justify-content: center; flex-shrink: 0; background: var(--accent-dim); }
-        .sample-avatar-placeholder svg { stroke: var(--accent); width: 22px; height: 22px; }
-        .sample-info h4 { font-size: 0.95rem; font-weight: 700; color: var(--text); }
-        .sample-info p  { font-size: 0.78rem; color: var(--text-muted); margin-top: 0.2rem; }
-        .badge-sample { display: inline-block; background: var(--accent-dim); border: 1px solid var(--accent); color: var(--accent); border-radius: 20px; font-size: 0.68rem; font-weight: 600; padding: 0.15rem 0.55rem; margin-top: 0.3rem; }
-
-        /* CTA Button */
+        /* ── CTA ───────────────────────────────────────────────────────── */
         .btn-cta {
             width: 100%;
             background: var(--gradient);
             border: none;
             border-radius: 14px;
-            padding: 0.9rem 1.5rem;
+            padding: 0.85rem 1.5rem;
             font-size: 1rem;
             font-weight: 700;
             color: #fff;
             cursor: pointer;
             transition: opacity 0.2s, transform 0.15s;
-            letter-spacing: 0.02em;
             box-shadow: 0 4px 20px var(--accent-glow);
         }
-        .btn-cta:hover { opacity: 0.9; transform: translateY(-1px); }
-        .btn-cta:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
+        .btn-cta:hover    { opacity: 0.9; transform: translateY(-1px); }
+        .btn-cta:disabled { opacity: 0.45; cursor: not-allowed; transform: none; }
 
-        .error-msg { color: var(--danger); font-size: 0.82rem; margin-top: 0.75rem; display: none; }
+        .error-msg { color: var(--danger); font-size: 0.82rem; margin-top: 0.7rem; display: none; }
         .error-msg.visible { display: block; }
 
-        .spinner { display: inline-block; width: 18px; height: 18px; border: 2px solid rgba(255,255,255,0.3); border-top-color: #fff; border-radius: 50%; animation: spin 0.7s linear infinite; vertical-align: middle; margin-right: 0.4rem; }
+        .spinner { display: inline-block; width: 16px; height: 16px; border: 2px solid rgba(255,255,255,0.3); border-top-color: #fff; border-radius: 50%; animation: spin 0.7s linear infinite; vertical-align: middle; margin-right: 0.4rem; }
         @keyframes spin { to { transform: rotate(360deg); } }
 
-        .divider { display: flex; align-items: center; gap: 1rem; margin: 1.5rem 0; color: var(--text-muted); font-size: 0.78rem; }
+        .divider { display: flex; align-items: center; gap: 0.75rem; margin: 1.25rem 0; color: var(--text-muted); font-size: 0.75rem; }
         .divider::before, .divider::after { content: ''; flex: 1; border-top: 1px solid var(--border); }
     </style>
 </head>
@@ -179,16 +212,45 @@
         </div>
         <p class="tagline">AI-powered fitness intelligence for endurance athletes</p>
 
+        <!-- Mode selector -->
         <div class="mode-grid">
+            <div class="mode-card" id="modeSample" onclick="selectMode('sample')">
+                <i data-lucide="users" class="mode-icon"></i>
+                <h3>Sample Account</h3>
+                <p>Explore with real athlete data — no setup needed</p>
+            </div>
             <div class="mode-card" id="modeOwn" onclick="selectMode('own')">
                 <i data-lucide="key-round" class="mode-icon"></i>
                 <h3>My Account</h3>
-                <p>Connect your own Strava account with your credentials</p>
+                <p>Connect your own Strava credentials</p>
             </div>
-            <div class="mode-card" id="modeSample" onclick="selectMode('sample')">
-                <i data-lucide="user-check" class="mode-icon"></i>
-                <h3>Sample Account</h3>
-                <p>Explore with a real athlete's data — no setup needed</p>
+        </div>
+
+        <!-- Sample profile picker -->
+        <div id="sampleProfiles">
+            <p class="section-label">Choose a profile</p>
+            <div class="profile-grid" id="profileGrid">
+                <!-- Populated dynamically -->
+                <div class="profile-card" id="pc-bhuvi" onclick="selectProfile('bhuvi')">
+                    <div class="profile-avatar-placeholder">
+                        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/></svg>
+                    </div>
+                    <div>
+                        <div class="profile-info-name">Bhuvi</div>
+                        <div class="profile-info-location">Loading…</div>
+                    </div>
+                    <span class="badge-demo">Demo</span>
+                </div>
+                <div class="profile-card" id="pc-rishit" onclick="selectProfile('rishit')">
+                    <div class="profile-avatar-placeholder">
+                        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/></svg>
+                    </div>
+                    <div>
+                        <div class="profile-info-name">Rishit</div>
+                        <div class="profile-info-location">Loading…</div>
+                    </div>
+                    <span class="badge-demo">Demo</span>
+                </div>
             </div>
         </div>
 
@@ -197,7 +259,6 @@
             <div class="form-row">
                 <label>Strava Client ID</label>
                 <input type="text" id="clientId" placeholder="e.g. 123456" />
-                <p class="help-text">Found in your Strava API Application settings at strava.com/settings/api</p>
             </div>
             <div class="form-row">
                 <label>Strava Client Secret</label>
@@ -206,25 +267,11 @@
             <div class="form-row">
                 <label>Access Token <span style="color:var(--accent)">*</span></label>
                 <input type="password" id="accessToken" placeholder="••••••••••••••••" />
-                <p class="help-text">Get a token at strava.com/settings/api — click "My API Application" and use the access token shown.</p>
+                <p class="help-text">Get it at strava.com/settings/api — "My API Application"</p>
             </div>
             <div class="form-row">
-                <label>Refresh Token</label>
-                <input type="password" id="refreshToken" placeholder="Optional — for auto-refresh" />
-            </div>
-        </div>
-
-        <!-- Sample account info -->
-        <div id="sampleInfo">
-            <div class="sample-card">
-                <div class="sample-avatar-placeholder">
-                    <i data-lucide="user" style="stroke:var(--accent);width:22px;height:22px"></i>
-                </div>
-                <div class="sample-info">
-                    <h4>Bhuvi's Account</h4>
-                    <p>Real Strava data — runs, stats &amp; AI insights</p>
-                    <span class="badge-sample">Read-only demo</span>
-                </div>
+                <label>Refresh Token <span style="opacity:.5">(optional)</span></label>
+                <input type="password" id="refreshToken" placeholder="For auto-refresh" />
             </div>
         </div>
 
@@ -237,24 +284,66 @@
     <script>
         lucide.createIcons();
 
-        let selectedMode = null;
+        let selectedMode    = null;
+        let selectedProfile = null;
+
+        // Load profile info from server
+        fetch('/api/auth/profiles')
+            .then(r => r.json())
+            .then(profiles => {
+                for (const [key, info] of Object.entries(profiles)) {
+                    const card = document.getElementById(`pc-${key}`);
+                    if (!card) continue;
+
+                    // Avatar
+                    const placeholder = card.querySelector('.profile-avatar-placeholder');
+                    if (info.avatar) {
+                        const img = document.createElement('img');
+                        img.src = info.avatar;
+                        img.alt = info.name;
+                        img.className = 'profile-avatar';
+                        img.onerror = () => {};   // keep placeholder on error
+                        placeholder.replaceWith(img);
+                    }
+
+                    // Name + location
+                    card.querySelector('.profile-info-name').innerText = info.name || key;
+                    card.querySelector('.profile-info-location').innerText = info.location || '';
+                }
+            })
+            .catch(() => {
+                // Non-fatal — cards already show defaults
+                document.querySelectorAll('.profile-info-location').forEach(el => el.innerText = '');
+            });
 
         function selectMode(mode) {
-            selectedMode = mode;
+            selectedMode    = mode;
+            selectedProfile = mode === 'sample' ? selectedProfile : null;
+
             document.getElementById('modeOwn').classList.toggle('active', mode === 'own');
             document.getElementById('modeSample').classList.toggle('active', mode === 'sample');
+            document.getElementById('sampleProfiles').classList.toggle('visible', mode === 'sample');
             document.getElementById('credForm').classList.toggle('visible', mode === 'own');
-            document.getElementById('sampleInfo').classList.toggle('visible', mode === 'sample');
-            document.getElementById('ctaBtn').disabled = false;
-            document.getElementById('ctaBtn').textContent = mode === 'sample' ? 'View Sample Dashboard' : 'Connect My Strava';
+
+            const ready = mode === 'own' || (mode === 'sample' && selectedProfile);
+            document.getElementById('ctaBtn').disabled = !ready;
+            document.getElementById('ctaBtn').textContent =
+                mode === 'own' ? 'Connect My Strava' : 'View Dashboard';
             document.getElementById('errMsg').classList.remove('visible');
+        }
+
+        function selectProfile(key) {
+            selectedProfile = key;
+            document.querySelectorAll('.profile-card').forEach(c => c.classList.remove('active'));
+            document.getElementById(`pc-${key}`)?.classList.add('active');
+            document.getElementById('ctaBtn').disabled = false;
+            document.getElementById('ctaBtn').textContent = 'View Dashboard';
         }
 
         async function handleLogin() {
             const btn = document.getElementById('ctaBtn');
             const err = document.getElementById('errMsg');
             err.classList.remove('visible');
-
             if (!selectedMode) return;
 
             btn.disabled = true;
@@ -262,22 +351,25 @@
 
             try {
                 if (selectedMode === 'sample') {
-                    const res = await fetch('/api/auth/sample', { method: 'POST' });
+                    if (!selectedProfile) throw new Error('Please select a profile first.');
+                    const res  = await fetch('/api/auth/sample', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ profile: selectedProfile }),
+                    });
                     const data = await res.json();
                     if (!res.ok) throw new Error(data.error || 'Failed');
-                    localStorage.setItem('athleteiq_mode', 'sample');
+                    localStorage.setItem('athleteiq_mode', `sample_${selectedProfile}`);
                     window.location.href = '/';
+
                 } else {
                     const accessToken  = document.getElementById('accessToken').value.trim();
                     const refreshToken = document.getElementById('refreshToken').value.trim();
                     const clientId     = document.getElementById('clientId').value.trim();
                     const clientSecret = document.getElementById('clientSecret').value.trim();
+                    if (!accessToken) throw new Error('Access Token is required.');
 
-                    if (!accessToken) {
-                        throw new Error('Access Token is required');
-                    }
-
-                    const res = await fetch('/api/auth/configure', {
+                    const res  = await fetch('/api/auth/configure', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({ clientId, clientSecret, accessToken, refreshToken }),
@@ -291,7 +383,7 @@
                 err.textContent = e.message;
                 err.classList.add('visible');
                 btn.disabled = false;
-                btn.textContent = selectedMode === 'sample' ? 'View Sample Dashboard' : 'Connect My Strava';
+                btn.textContent = selectedMode === 'own' ? 'Connect My Strava' : 'View Dashboard';
             }
         }
     </script>
