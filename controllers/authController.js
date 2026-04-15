@@ -33,14 +33,23 @@ const SAMPLE_PROFILES = {
 // ── GET /api/auth/profiles ────────────────────────────────────────────────────
 // Returns basic info (name, avatar, location) for each sample profile.
 // Fetches live from Strava so avatars are always fresh.
+// Profiles that share the same ACCESS_TOKEN reuse the first fetch result
+// so a mid-loop token refresh doesn't invalidate subsequent requests.
 exports.getProfiles = async (req, res) => {
     const { fetchFromStrava, updateEnv: swapTokens } = require('../services/stravaService');
-    const results = {};
+    const results    = {};
+    const fetchCache = {};   // keyed by ACCESS_TOKEN — avoids re-fetching identical accounts
 
     for (const [key, p] of Object.entries(SAMPLE_PROFILES)) {
         if (!p.ACCESS_TOKEN) { results[key] = { name: p.name }; continue; }
+
+        // Reuse already-fetched data if this token was seen before
+        if (fetchCache[p.ACCESS_TOKEN]) {
+            results[key] = fetchCache[p.ACCESS_TOKEN];
+            continue;
+        }
+
         try {
-            // Temporarily swap tokens to fetch this profile's athlete data
             swapTokens({
                 STRAVA_ACCESS_TOKEN:  p.ACCESS_TOKEN,
                 STRAVA_REFRESH_TOKEN: p.REFRESH_TOKEN  || '',
@@ -49,20 +58,22 @@ exports.getProfiles = async (req, res) => {
                 STRAVA_CLIENT_SECRET: p.CLIENT_SECRET  || '',
             });
             const athlete = await fetchFromStrava('/athlete');
-            results[key] = {
+            const info = {
                 name:     `${athlete.firstname} ${athlete.lastname}`,
                 username: athlete.username,
                 avatar:   athlete.profile_medium || athlete.profile || '',
                 location: [athlete.city, athlete.country].filter(Boolean).join(', '),
                 sex:      athlete.sex,
             };
+            results[key]                 = info;
+            fetchCache[p.ACCESS_TOKEN]   = info;
         } catch (e) {
             console.warn(`[Auth/profiles] Could not fetch ${key}:`, e.message.slice(0, 60));
             results[key] = { name: p.name };
         }
     }
 
-    // Restore whichever token was active before (last entry wins — restore bhuvi as default)
+    // Restore whichever token was active before
     const b = SAMPLE_PROFILES.bhuvi;
     swapTokens({
         STRAVA_ACCESS_TOKEN:  tokens.ACCESS_TOKEN  || b.ACCESS_TOKEN  || '',
