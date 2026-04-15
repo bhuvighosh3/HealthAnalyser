@@ -16,22 +16,36 @@ const tokens = {
 // gets the right tokens regardless of which Cloud Run instance handles it.
 const requestTokenStore = new AsyncLocalStorage();
 
-// Frozen at startup — safe to read on any instance without shared mutable state
+// Per-profile token objects. If two profiles share the same ACCESS_TOKEN
+// (i.e. the same underlying Strava account) they point to the SAME object
+// so a rotating refresh on either profile keeps both in sync and neither
+// ends up holding a stale, invalidated refresh token.
+const _builtinBhuvi = {
+    ACCESS_TOKEN:  process.env.STRAVA_ACCESS_TOKEN,
+    REFRESH_TOKEN: process.env.STRAVA_REFRESH_TOKEN,
+    EXPIRES_AT:    process.env.STRAVA_EXPIRES_AT,
+    CLIENT_ID:     process.env.STRAVA_CLIENT_ID,
+    CLIENT_SECRET: process.env.STRAVA_CLIENT_SECRET,
+};
+
+const _builtinRishit = {
+    ACCESS_TOKEN:  process.env.RISHIT_ACCESS_TOKEN,
+    REFRESH_TOKEN: process.env.RISHIT_REFRESH_TOKEN,
+    EXPIRES_AT:    process.env.RISHIT_EXPIRES_AT,
+    CLIENT_ID:     process.env.RISHIT_CLIENT_ID,
+    CLIENT_SECRET: process.env.RISHIT_CLIENT_SECRET,
+};
+
+// If both profiles use the same CLIENT_ID + CLIENT_SECRET they are the same
+// Strava app/account. Point rishit at bhuvi's object so any token refresh
+// (which mutates the object in-place) is immediately visible to both profiles
+// and neither ends up holding an invalidated rotating refresh token.
+const _sameApp = _builtinRishit.CLIENT_ID     === _builtinBhuvi.CLIENT_ID &&
+                 _builtinRishit.CLIENT_SECRET  === _builtinBhuvi.CLIENT_SECRET;
+
 const PROFILE_TOKENS = {
-    bhuvi: {
-        ACCESS_TOKEN:  process.env.STRAVA_ACCESS_TOKEN,
-        REFRESH_TOKEN: process.env.STRAVA_REFRESH_TOKEN,
-        EXPIRES_AT:    process.env.STRAVA_EXPIRES_AT,
-        CLIENT_ID:     process.env.STRAVA_CLIENT_ID,
-        CLIENT_SECRET: process.env.STRAVA_CLIENT_SECRET,
-    },
-    rishit: {
-        ACCESS_TOKEN:  process.env.RISHIT_ACCESS_TOKEN,
-        REFRESH_TOKEN: process.env.RISHIT_REFRESH_TOKEN,
-        EXPIRES_AT:    process.env.RISHIT_EXPIRES_AT,
-        CLIENT_ID:     process.env.RISHIT_CLIENT_ID,
-        CLIENT_SECRET: process.env.RISHIT_CLIENT_SECRET,
-    },
+    bhuvi:  _builtinBhuvi,
+    rishit: _sameApp ? _builtinBhuvi : _builtinRishit,
 };
 
 function updateEnv(newTokens) {
