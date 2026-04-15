@@ -384,6 +384,26 @@
                                 <strong>RAG Input:</strong> your goal, body stats &amp; recent Strava activities.<br>
                                 <strong>RAG Context:</strong> Firecrawl searches Johns Hopkins Medicine, WHO &amp; Harvard HSPH for goal-specific sports-nutrition content, structures it into topic-labelled sections, and injects it as grounding context into the AI agent.
                             </p>
+                            <!-- Dietary Preferences -->
+                            <div style="margin-top:1.2rem;display:flex;flex-direction:column;gap:0.75rem">
+                                <div>
+                                    <label style="font-size:0.8rem;font-weight:600;color:var(--text-muted);display:block;margin-bottom:4px">
+                                        <i data-lucide="alert-triangle" style="display:inline-block;width:13px;height:13px;vertical-align:middle;margin-right:4px"></i>
+                                        Allergies <span style="font-weight:400;color:var(--text-muted)">(optional — e.g. nuts, gluten, dairy)</span>
+                                    </label>
+                                    <input id="nutrition-allergies" type="text" placeholder="e.g. peanuts, shellfish, lactose…"
+                                        style="width:100%;padding:8px 12px;border-radius:8px;border:1px solid var(--border);background:var(--bg-card);color:var(--text-primary);font-size:0.85rem;box-sizing:border-box">
+                                </div>
+                                <div>
+                                    <label style="font-size:0.8rem;font-weight:600;color:var(--text-muted);display:block;margin-bottom:4px">
+                                        <i data-lucide="thumbs-down" style="display:inline-block;width:13px;height:13px;vertical-align:middle;margin-right:4px"></i>
+                                        Foods I dislike <span style="font-weight:400;color:var(--text-muted)">(optional — e.g. broccoli, fish)</span>
+                                    </label>
+                                    <input id="nutrition-dislikes" type="text" placeholder="e.g. tofu, beets, cottage cheese…"
+                                        style="width:100%;padding:8px 12px;border-radius:8px;border:1px solid var(--border);background:var(--bg-card);color:var(--text-primary);font-size:0.85rem;box-sizing:border-box">
+                                </div>
+                            </div>
+
                             <div class="analyse-btn-wrapper" style="margin-top:1rem">
                                 <button id="nutritionBtn" class="analyse-btn">
                                     <i data-lucide="leaf" class="analyse-btn-icon"></i>

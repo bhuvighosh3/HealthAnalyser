@@ -821,11 +821,16 @@ document.addEventListener('click', async (e) => {
         const goal         = document.getElementById('goalSelect')?.value           || 'General Fitness';
         const durationWeeks = parseInt(document.getElementById('f-duration')?.value) || 8;
 
+        const allergies = document.getElementById('nutrition-allergies')?.value.trim() || '';
+        const dislikes  = document.getElementById('nutrition-dislikes')?.value.trim()  || '';
+
         const body = {
             goal, age, sex, weight, height, durationWeeks,
             weeklyDistKm:  _nutritionMeta?.weeklyDistKm  ?? null,
             weeklyHours:   _nutritionMeta?.weeklyHours   ?? null,
             weeklyKcal:    _nutritionMeta?.weeklyKcal    ?? null,
+            allergies:     allergies || null,
+            dislikes:      dislikes  || null,
         };
 
         const res = await fetch('/api/nutrition', {

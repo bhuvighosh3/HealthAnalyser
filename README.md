@@ -164,11 +164,20 @@ flowchart LR
     EMBED --> FS[(Firestore\nnutrition_vectors)]
     FS --> SEARCH
     SEARCH --> AGENT[ADK LlmAgent\nNutrition Agent\nGemini 2.5 Flash]
-    STRAVA[Live Strava data] --> AGENT
-    AGENT --> PLAN([Personalised nutrition plan])
+    STRAVA[Last 7 Strava activities] --> AGENT
+    PREFS[Allergies & dislikes\ntyped by user] --> AGENT
+    AGENT --> PLAN([Personalised nutrition plan\nhonours dietary restrictions])
 ```
 
 Chunks are crawled **once per 7 days per goal category** and stored in Firestore with Vertex AI vector embeddings. Subsequent requests skip the crawl entirely and go straight to semantic search.
+
+### Dietary Preferences
+
+Before generating the plan the user can optionally enter:
+- **Allergies** — foods the agent must never suggest (e.g. `peanuts, shellfish, lactose`)
+- **Dislikes** — foods to avoid entirely, not even as alternatives (e.g. `tofu, beets`)
+
+These are collected **after** the RAG retrieval runs (so they do not affect which chunks are retrieved) and injected into the agent instruction alongside the RAG context. The agent receives an explicit hard constraint: *never suggest allergenic foods; omit disliked foods entirely*.
 
 ---
 

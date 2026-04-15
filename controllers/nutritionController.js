@@ -17,6 +17,8 @@ exports.nutritionPlan = async (req, res) => {
         weeklyHours,
         weeklyKcal,
         durationWeeks = 8,
+        allergies = null,
+        dislikes = null,
     } = req.body;
 
     try {
@@ -24,7 +26,7 @@ exports.nutritionPlan = async (req, res) => {
         let stravaContext = '';
         try {
             const activities = await fetchFromStrava('/athlete/activities?per_page=20');
-            const recent = activities.slice(0, 10);
+            const recent = activities.slice(0, 7);
             stravaContext = `Recent ${recent.length} activities:\n` + recent.map(a =>
                 `• ${new Date(a.start_date).toDateString()} | ${a.type} | ${(a.distance/1000).toFixed(1)} km | ${Math.round(a.moving_time/60)} min`
             ).join('\n');
@@ -53,6 +55,11 @@ ${ragSection}
 - Avg weekly distance: ${weeklyDistKm ?? 'unknown'} km
 - Avg weekly active time: ${weeklyHours ?? 'unknown'} hrs
 - Avg weekly calories burned: ${weeklyKcal ?? 'unknown'} kcal
+
+## DIETARY RESTRICTIONS
+- Allergies: ${allergies || 'None reported'}
+- Dislikes:  ${dislikes  || 'None reported'}
+IMPORTANT: Never suggest any food the athlete is allergic to. Avoid foods they dislike entirely — do not mention them even as alternatives.
 
 ## RECENT TRAINING (from Strava)
 ${stravaContext || 'No activity data available.'}
