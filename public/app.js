@@ -1,7 +1,7 @@
 let currentAthleteId = null;
 
 function handleLogout() {
-    localStorage.removeItem('athleteiq_mode');
+    sessionStorage.removeItem('athleteiq_mode');
     window.location.href = '/login.html';
 }
 
@@ -9,7 +9,7 @@ function handleLogout() {
 // Sent as X-Profile header so the server uses the right Strava credentials
 // regardless of which Cloud Run instance handles the request.
 function getProfileKey() {
-    const mode = localStorage.getItem('athleteiq_mode') || '';
+    const mode = sessionStorage.getItem('athleteiq_mode') || '';
     if (mode === 'sample_bhuvi')  return 'bhuvi';
     if (mode === 'sample_rishit') return 'rishit';
     return ''; // 'own' credentials — server uses tokens from /api/auth/configure

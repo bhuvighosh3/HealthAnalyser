@@ -12,8 +12,10 @@
     <script src="https://unpkg.com/lucide@latest"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
     <script>
-        // Redirect to login if no session is set
-        if (!localStorage.getItem('athleteiq_mode')) {
+        // Redirect to login if no session is set.
+        // sessionStorage clears on tab/browser close so the login page
+        // is always shown when the app is opened fresh.
+        if (!sessionStorage.getItem('athleteiq_mode')) {
             window.location.href = '/login.html';
         }
     </script>

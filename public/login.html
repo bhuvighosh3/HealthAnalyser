@@ -359,7 +359,7 @@
                     });
                     const data = await res.json();
                     if (!res.ok) throw new Error(data.error || 'Failed');
-                    localStorage.setItem('athleteiq_mode', `sample_${selectedProfile}`);
+                    sessionStorage.setItem('athleteiq_mode', `sample_${selectedProfile}`);
                     window.location.href = '/';
 
                 } else {
@@ -376,7 +376,7 @@
                     });
                     const data = await res.json();
                     if (!res.ok) throw new Error(data.error || 'Failed');
-                    localStorage.setItem('athleteiq_mode', 'own');
+                    sessionStorage.setItem('athleteiq_mode', 'own');
                     window.location.href = '/';
                 }
             } catch (e) {
