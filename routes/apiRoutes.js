@@ -4,9 +4,10 @@ const router = express.Router();
 const stravaController = require('../controllers/stravaController');
 const aiController = require('../controllers/aiController');
 const forecastController = require('../controllers/forecastController');
-const scheduleController = require('../controllers/scheduleController');
-const nutritionController = require('../controllers/nutritionController');
-const authController      = require('../controllers/authController');
+const scheduleController         = require('../controllers/scheduleController');
+const nutritionController        = require('../controllers/nutritionController');
+const authController             = require('../controllers/authController');
+const googleCalendarController   = require('../controllers/googleCalendarController');
 
 // Auth Routes
 router.get( '/auth/profiles',  authController.getProfiles);
@@ -28,8 +29,15 @@ router.post('/forecast', forecastController.forecast);
 // Nutrition RAG Agent
 router.post('/nutrition', nutritionController.nutritionPlan);
 
-// Google Calendar
+// Google Calendar (existing MCP-based schedule)
 router.get('/calendar/status', scheduleController.calendarStatus);
 router.post('/schedule', scheduleController.schedule);
+
+// Google Calendar OAuth (new per-user auth flow)
+router.get( '/auth/google-calendar/status',     googleCalendarController.status);
+router.post('/auth/google-calendar/disconnect', googleCalendarController.disconnectCalendar);
+router.get( '/calendar/upcoming',               googleCalendarController.upcomingEvents);
+router.post('/calendar/schedule',               googleCalendarController.scheduleWorkouts);
+router.post('/calendar/add-workout',            googleCalendarController.addWorkout);
 
 module.exports = router;
