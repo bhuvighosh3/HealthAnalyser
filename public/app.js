@@ -654,13 +654,62 @@ function initDownloadButton(plan, recommendations, hypothesis) {
 // ===== GOOGLE CALENDAR SCHEDULING =====
 let _weeklyTrainingPlan = null; // set by renderForecastResults
 
+// ── Google Calendar connection helpers ────────────────────────────────────────
+let _gcalConnected = false;
+
+async function refreshGcalStatus() {
+    try {
+        const res  = await fetch('/api/auth/google-calendar/status');
+        const data = await res.json();
+        _gcalConnected = !!data.connected;
+
+        const statusText   = document.getElementById('gcalStatusText');
+        const connectBtn   = document.getElementById('gcalConnectBtn');
+        const disconnectBtn= document.getElementById('gcalDisconnectBtn');
+        if (!statusText) return;
+
+        if (_gcalConnected) {
+            statusText.innerHTML   = `<span style="color:#4ade80">✓ Connected as ${data.email}</span>`;
+            connectBtn.style.display    = 'none';
+            disconnectBtn.style.display = 'inline';
+        } else {
+            statusText.textContent      = 'Connect your Google Calendar to schedule workouts.';
+            connectBtn.style.display    = 'inline-flex';
+            disconnectBtn.style.display = 'none';
+        }
+        lucide.createIcons();
+    } catch (_) {}
+}
+
 function initCalendarSection(plan) {
     _weeklyTrainingPlan = plan;
     const section = document.getElementById('calendarSection');
     if (!section) return;
     section.classList.remove('hidden');
+    refreshGcalStatus();
     lucide.createIcons();
 }
+
+// Connect button — opens Google OAuth in a popup
+document.addEventListener('click', (e) => {
+    if (!e.target.closest('#gcalConnectBtn')) return;
+    const popup = window.open('/auth/google-calendar', 'gcal_auth', 'width=520,height=620');
+    const onMsg = async (ev) => {
+        if (ev.data?.type === 'GCAL_CONNECTED') {
+            window.removeEventListener('message', onMsg);
+            if (popup && !popup.closed) popup.close();
+            await refreshGcalStatus();
+        }
+    };
+    window.addEventListener('message', onMsg);
+});
+
+// Disconnect button
+document.addEventListener('click', async (e) => {
+    if (!e.target.closest('#gcalDisconnectBtn')) return;
+    await fetch('/api/auth/google-calendar/disconnect', { method: 'POST' });
+    await refreshGcalStatus();
+});
 
 // ── Schedule: two-phase (preview → confirm) ────────────────────────────────
 let _scheduleMeta = null; // stores { durationWeeks, startDate } for the confirm step
@@ -739,6 +788,10 @@ document.addEventListener('click', async (e) => {
 
     // ── Phase 2: "Confirm & Add to Calendar" → run the agent ─────────────────
     if (e.target.closest('#scheduleConfirmBtn')) {
+        if (!_gcalConnected) {
+            alert('Please connect your Google Calendar first using the button above.');
+            return;
+        }
         const confirmBtn = e.target.closest('#scheduleConfirmBtn');
         const cancelBtn  = document.getElementById('scheduleCancelBtn');
         const preview    = document.getElementById('schedulePreview');
@@ -756,7 +809,9 @@ document.addEventListener('click', async (e) => {
 
         const { durationWeeks, startDate } = _scheduleMeta || {};
         try {
-            const res  = await fetch('/api/schedule', {
+            // Use new per-user OAuth endpoint if connected, else fall back to MCP-based
+            const endpoint = _gcalConnected ? '/api/calendar/schedule' : '/api/schedule';
+            const res  = await fetch(endpoint, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ weeklyTrainingPlan: _weeklyTrainingPlan, durationWeeks, startDate })

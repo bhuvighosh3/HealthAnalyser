@@ -422,7 +422,17 @@
                         <!-- Calendar Scheduling -->
                         <div id="calendarSection" class="forecast-subsection glass-panel hidden">
                             <h3 class="forecast-sub-title"><i data-lucide="calendar-plus" style="display:inline-block;width:18px;height:18px;vertical-align:middle;margin-right:6px"></i>Schedule in Google Calendar</h3>
-                            <p class="calendar-desc">Add your workout plan to Google Calendar — the AI will find free slots and schedule each session for you.</p>
+                            <p class="calendar-desc">Add your workout plan to Google Calendar — events go into <strong>your</strong> calendar.</p>
+
+                            <!-- Google Calendar connection status -->
+                            <div id="gcalConnectBanner" style="margin-top:1rem;padding:12px 14px;border-radius:10px;background:rgba(56,189,248,0.08);border:1px solid rgba(56,189,248,0.2);display:flex;align-items:center;justify-content:space-between;gap:1rem">
+                                <span id="gcalStatusText" style="font-size:0.83rem;color:var(--text-muted)">Checking Google Calendar…</span>
+                                <button id="gcalConnectBtn" class="analyse-btn" style="padding:6px 14px;font-size:0.8rem;min-width:0;display:none">
+                                    <i data-lucide="link" class="analyse-btn-icon"></i>Connect Google Calendar
+                                </button>
+                                <button id="gcalDisconnectBtn" style="background:none;border:none;color:var(--text-muted);font-size:0.75rem;cursor:pointer;display:none;text-decoration:underline">Disconnect</button>
+                            </div>
+
                             <div class="controls-grid" style="margin-top:1rem">
                                 <div class="control-group">
                                     <label for="calDurationWeeks">Weeks to schedule</label>
