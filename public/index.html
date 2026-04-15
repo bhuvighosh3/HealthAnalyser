@@ -400,7 +400,47 @@
                         <!-- Calendar Scheduling -->
                         <div id="calendarSection" class="forecast-subsection glass-panel hidden">
                             <h3 class="forecast-sub-title"><i data-lucide="calendar-plus" style="display:inline-block;width:18px;height:18px;vertical-align:middle;margin-right:6px"></i>Schedule in Google Calendar</h3>
-                            <p class="calendar-desc">Add your workout plan to Google Calendar — the AI will find free slots and schedule each session for you.</p>
+                            <p class="calendar-desc">Connect your Google account — the AI will check your existing events, find free slots, and schedule each session automatically.</p>
+
+                            <!-- Google Account Connection -->
+                            <div id="gcalConnectArea" style="margin-top:1rem">
+                                <!-- Not connected state -->
+                                <div id="gcalNotConnected">
+                                    <button id="connectGcalBtn" class="analyse-btn" style="background:linear-gradient(135deg,#4285f4,#34a853);font-size:0.88rem;padding:0.55rem 1.2rem">
+                                        <i data-lucide="calendar" class="analyse-btn-icon"></i>
+                                        Connect Google Calendar
+                                    </button>
+                                    <p style="font-size:0.75rem;opacity:0.5;margin-top:0.4rem">Sign in with any Google account — each user connects their own.</p>
+                                </div>
+                                <!-- Connected state -->
+                                <div id="gcalConnected" class="hidden" style="display:flex;align-items:center;gap:0.75rem;flex-wrap:wrap">
+                                    <div style="display:flex;align-items:center;gap:0.5rem;background:rgba(52,211,153,0.1);border:1px solid rgba(52,211,153,0.3);border-radius:8px;padding:0.4rem 0.9rem">
+                                        <i data-lucide="check-circle" style="width:15px;height:15px;stroke:#34d399"></i>
+                                        <span id="gcalConnectedEmail" style="font-size:0.85rem;color:#34d399"></span>
+                                    </div>
+                                    <button id="disconnectGcalBtn" style="background:none;border:1px solid rgba(255,255,255,0.15);border-radius:8px;padding:0.35rem 0.75rem;color:rgba(255,255,255,0.5);font-size:0.75rem;cursor:pointer;font-family:inherit">
+                                        Disconnect
+                                    </button>
+                                </div>
+                            </div>
+
+                            <hr style="border:none;border-top:1px solid rgba(255,255,255,0.08);margin:1.25rem 0">
+
+                            <!-- View upcoming events -->
+                            <div>
+                                <button id="viewCalendarBtn" class="analyse-btn secondary" style="font-size:0.85rem;padding:0.5rem 1.1rem" disabled>
+                                    <i data-lucide="calendar-search" class="analyse-btn-icon"></i>
+                                    View My Upcoming Events
+                                </button>
+                                <div id="upcomingLoader" class="analysis-loader hidden" style="margin-top:0.75rem">
+                                    <div class="loader-spinner"></div>
+                                    <p>Fetching your calendar…</p>
+                                </div>
+                                <div id="upcomingResult" class="hidden" style="margin-top:0.75rem"></div>
+                            </div>
+
+                            <hr style="border:none;border-top:1px solid rgba(255,255,255,0.08);margin:1.25rem 0">
+
                             <div class="controls-grid" style="margin-top:1rem">
                                 <div class="control-group">
                                     <label for="calDurationWeeks">Weeks to schedule</label>
@@ -414,12 +454,12 @@
                             <div class="analyse-btn-wrapper" style="margin-top:1rem">
                                 <button id="scheduleBtn" class="analyse-btn">
                                     <i data-lucide="calendar-check" class="analyse-btn-icon"></i>
-                                    Schedule Workouts
+                                    Schedule Workouts in Calendar
                                 </button>
                             </div>
                             <div id="scheduleLoader" class="analysis-loader hidden" style="margin-top:1rem">
                                 <div class="loader-spinner"></div>
-                                <p>Scheduling into your calendar…</p>
+                                <p>Checking your calendar and scheduling workouts…</p>
                             </div>
                             <div id="scheduleResult" class="hidden" style="margin-top:1rem"></div>
                         </div>

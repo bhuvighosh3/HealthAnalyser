@@ -631,16 +631,131 @@ function initDownloadButton(plan, recommendations, hypothesis) {
 }
 
 // ===== GOOGLE CALENDAR SCHEDULING =====
-let _weeklyTrainingPlan = null; // set by renderForecastResults
+let _weeklyTrainingPlan = null;
 
 function initCalendarSection(plan) {
     _weeklyTrainingPlan = plan;
     const section = document.getElementById('calendarSection');
     if (!section) return;
     section.classList.remove('hidden');
+    checkGcalStatus();
     lucide.createIcons();
 }
 
+// ── Check connection status on load ──────────────────────────────────────────
+async function checkGcalStatus() {
+    try {
+        const res  = await fetch('/api/auth/google-calendar/status');
+        const data = await res.json();
+        updateGcalUI(data.connected, data.email);
+    } catch (_) {}
+}
+
+function updateGcalUI(connected, email) {
+    const notConn  = document.getElementById('gcalNotConnected');
+    const connArea = document.getElementById('gcalConnected');
+    const emailEl  = document.getElementById('gcalConnectedEmail');
+    const viewBtn  = document.getElementById('viewCalendarBtn');
+    const schedBtn = document.getElementById('scheduleBtn');
+
+    if (connected && email) {
+        notConn?.classList.add('hidden');
+        connArea?.classList.remove('hidden');
+        if (emailEl) emailEl.textContent = email;
+        if (viewBtn)  viewBtn.disabled  = false;
+        if (schedBtn) schedBtn.disabled = false;
+    } else {
+        notConn?.classList.remove('hidden');
+        connArea?.classList.add('hidden');
+        if (viewBtn)  viewBtn.disabled  = true;
+        if (schedBtn) schedBtn.disabled = true;
+    }
+    lucide.createIcons();
+}
+
+// ── Connect Google Calendar (opens popup) ────────────────────────────────────
+document.addEventListener('click', (e) => {
+    if (!e.target.closest('#connectGcalBtn')) return;
+    const popup = window.open(
+        '/auth/google-calendar',
+        'Connect Google Calendar',
+        'width=500,height=640,scrollbars=yes'
+    );
+    // Listen for the callback message from the popup
+    window.addEventListener('message', async (event) => {
+        if (event.data?.type === 'GCAL_CONNECTED') {
+            if (popup && !popup.closed) popup.close();
+            updateGcalUI(true, event.data.email);
+        }
+    }, { once: true });
+    // Poll in case popup blocked
+    const poll = setInterval(async () => {
+        if (popup?.closed) {
+            clearInterval(poll);
+            await checkGcalStatus();
+        }
+    }, 1000);
+});
+
+// ── Disconnect Google Calendar ────────────────────────────────────────────────
+document.addEventListener('click', async (e) => {
+    if (!e.target.closest('#disconnectGcalBtn')) return;
+    await fetch('/api/auth/google-calendar/disconnect', { method: 'POST' });
+    updateGcalUI(false, null);
+    document.getElementById('upcomingResult')?.classList.add('hidden');
+    document.getElementById('scheduleResult')?.classList.add('hidden');
+});
+
+// ── View Upcoming Calendar Events ────────────────────────────────────────────
+document.addEventListener('click', async (e) => {
+    const btn = e.target.closest('#viewCalendarBtn');
+    if (!btn) return;
+
+    btn.disabled = true;
+    const ogHtml = btn.innerHTML;
+    btn.innerHTML = '<i data-lucide="loader-2" class="analyse-btn-icon spin-icon"></i> Loading…';
+    lucide.createIcons();
+
+    const loader = document.getElementById('upcomingLoader');
+    const result = document.getElementById('upcomingResult');
+    loader.classList.remove('hidden');
+    result.classList.add('hidden');
+
+    try {
+        const res  = await fetch('/api/calendar/upcoming?days=14');
+        const data = await res.json();
+
+        loader.classList.add('hidden');
+        result.classList.remove('hidden');
+
+        if (data.error) {
+            result.innerHTML = `<div class="analysis-error">
+                <p>${data.error}</p>
+                ${data.hint ? `<p style="margin-top:.4rem;opacity:.7;font-size:.82rem">${data.hint}</p>` : ''}
+            </div>`;
+        } else if (!data.events || !data.events.trim()) {
+            result.innerHTML = `<div class="coach-note glass-panel"><p style="opacity:.7">No upcoming events in the next ${data.days} days.</p></div>`;
+        } else {
+            result.innerHTML = `
+                <div class="coach-note glass-panel" style="white-space:pre-wrap;font-size:.85rem">
+                    <p style="font-weight:600;margin-bottom:.6rem;opacity:.7;font-size:.78rem;text-transform:uppercase;letter-spacing:.05em">
+                        📅 Upcoming ${data.days} days · ${data.email}
+                    </p>
+                    ${data.events}
+                </div>`;
+        }
+    } catch (err) {
+        loader.classList.add('hidden');
+        result.classList.remove('hidden');
+        result.innerHTML = `<div class="analysis-error"><p>Failed to load calendar: ${err.message}</p></div>`;
+    } finally {
+        btn.disabled = false;
+        btn.innerHTML = ogHtml;
+        lucide.createIcons();
+    }
+});
+
+// ── Schedule Workouts into Calendar ──────────────────────────────────────────
 document.addEventListener('click', async (e) => {
     const btn = e.target.closest('#scheduleBtn');
     if (!btn) return;
@@ -664,10 +779,10 @@ document.addEventListener('click', async (e) => {
     result.classList.add('hidden');
 
     try {
-        const res = await fetch('/api/schedule', {
+        const res = await fetch('/api/calendar/schedule', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ weeklyTrainingPlan: _weeklyTrainingPlan, durationWeeks, startDate })
+            body: JSON.stringify({ weeklyTrainingPlan: _weeklyTrainingPlan, durationWeeks, startDate }),
         });
         const data = await res.json();
 
@@ -675,9 +790,16 @@ document.addEventListener('click', async (e) => {
         result.classList.remove('hidden');
 
         if (data.error) {
-            result.innerHTML = `<div class="analysis-error"><p>${data.error}</p>${data.hint ? `<p style="margin-top:.5rem;opacity:.7">${data.hint}</p>` : ''}</div>`;
+            result.innerHTML = `<div class="analysis-error">
+                <p>${data.error}</p>
+                ${data.hint ? `<p style="margin-top:.4rem;opacity:.7;font-size:.82rem">${data.hint}</p>` : ''}
+            </div>`;
         } else {
-            result.innerHTML = `<div class="coach-note glass-panel" style="white-space:pre-wrap">${data.summary}</div>`;
+            result.innerHTML = `
+                <div class="coach-note glass-panel" style="white-space:pre-wrap">
+                    <p style="font-weight:600;margin-bottom:.6rem;color:var(--accent)">✅ Workouts Scheduled!</p>
+                    ${data.summary}
+                </div>`;
         }
     } catch (err) {
         loader.classList.add('hidden');

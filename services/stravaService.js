@@ -3,13 +3,24 @@ const { AsyncLocalStorage } = require('async_hooks');
 const { resetMcpClient } = require('./mcpService');
 
 // ── Global token store (mutated on profile switch / token refresh) ─────────────
+// Use getters so tokens are read from process.env at call time, not at module load
 const tokens = {
-    ACCESS_TOKEN: process.env.STRAVA_ACCESS_TOKEN,
-    REFRESH_TOKEN: process.env.STRAVA_REFRESH_TOKEN,
-    EXPIRES_AT: process.env.STRAVA_EXPIRES_AT,
-    CLIENT_ID: process.env.STRAVA_CLIENT_ID,
-    CLIENT_SECRET: process.env.STRAVA_CLIENT_SECRET
+    get ACCESS_TOKEN()  { return process.env.STRAVA_ACCESS_TOKEN; },
+    get REFRESH_TOKEN() { return process.env.STRAVA_REFRESH_TOKEN; },
+    get EXPIRES_AT()    { return process.env.STRAVA_EXPIRES_AT; },
+    get CLIENT_ID()     { return process.env.STRAVA_CLIENT_ID; },
+    get CLIENT_SECRET() { return process.env.STRAVA_CLIENT_SECRET; },
 };
+
+// Allow explicit override (used after profile switch)
+let _override = {};
+Object.defineProperties(tokens, {
+    ACCESS_TOKEN:  { get: () => _override.ACCESS_TOKEN  ?? process.env.STRAVA_ACCESS_TOKEN,  set: v => _override.ACCESS_TOKEN  = v, enumerable: true },
+    REFRESH_TOKEN: { get: () => _override.REFRESH_TOKEN ?? process.env.STRAVA_REFRESH_TOKEN, set: v => _override.REFRESH_TOKEN = v, enumerable: true },
+    EXPIRES_AT:    { get: () => _override.EXPIRES_AT    ?? process.env.STRAVA_EXPIRES_AT,    set: v => _override.EXPIRES_AT    = v, enumerable: true },
+    CLIENT_ID:     { get: () => _override.CLIENT_ID     ?? process.env.STRAVA_CLIENT_ID,     set: v => _override.CLIENT_ID     = v, enumerable: true },
+    CLIENT_SECRET: { get: () => _override.CLIENT_SECRET ?? process.env.STRAVA_CLIENT_SECRET, set: v => _override.CLIENT_SECRET = v, enumerable: true },
+});
 
 // ── Per-request token context (avoids multi-instance / race-condition issues) ──
 // Middleware populates this store from the X-Profile header so every request
@@ -31,6 +42,13 @@ const PROFILE_TOKENS = {
         EXPIRES_AT:    process.env.RISHIT_EXPIRES_AT,
         CLIENT_ID:     process.env.RISHIT_CLIENT_ID,
         CLIENT_SECRET: process.env.RISHIT_CLIENT_SECRET,
+    },
+    ritwik: {
+        ACCESS_TOKEN:  process.env.RITWIK_ACCESS_TOKEN,
+        REFRESH_TOKEN: process.env.RITWIK_REFRESH_TOKEN,
+        EXPIRES_AT:    process.env.RITWIK_EXPIRES_AT,
+        CLIENT_ID:     process.env.RITWIK_CLIENT_ID,
+        CLIENT_SECRET: process.env.RITWIK_CLIENT_SECRET,
     },
 };
 
