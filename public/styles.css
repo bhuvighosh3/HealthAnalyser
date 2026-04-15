@@ -430,6 +430,40 @@ h1 {
 
 /* Chat widget */
 .chat-widget { position: fixed; bottom: 2rem; right: 2rem; z-index: 1000; }
+
+/* Greeting bubble */
+.chat-greeting {
+    position: absolute;
+    bottom: 72px;
+    right: 0;
+    width: 220px;
+    padding: 12px 36px 12px 14px;
+    border-radius: 14px 14px 4px 14px;
+    font-size: 0.82rem;
+    line-height: 1.45;
+    color: var(--text-primary);
+    box-shadow: 0 6px 24px rgba(0,0,0,0.35);
+    animation: greetingPop 0.3s cubic-bezier(0.34,1.56,0.64,1) both;
+    transform-origin: bottom right;
+}
+.chat-greeting p  { margin: 0; }
+.chat-greeting strong { color: var(--accent); }
+.chat-greeting-close {
+    position: absolute;
+    top: 7px; right: 7px;
+    background: none; border: none;
+    color: var(--text-muted); cursor: pointer;
+    padding: 2px; line-height: 1;
+    display: flex; align-items: center;
+    opacity: 0.7; transition: opacity 0.15s;
+}
+.chat-greeting-close:hover { opacity: 1; }
+.chat-greeting-close svg  { width: 13px; height: 13px; }
+.chat-greeting.hidden { display: none; }
+@keyframes greetingPop {
+    from { opacity: 0; transform: scale(0.7); }
+    to   { opacity: 1; transform: scale(1);   }
+}
 .chat-toggle {
     width: 60px; height: 60px;
     border-radius: 50%; border: none;

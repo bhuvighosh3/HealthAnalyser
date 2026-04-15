@@ -173,14 +173,18 @@ function removeSkeleton(selector) {
 }
 
 // --- Chat Logic ---
-const chatToggle = document.getElementById('chatToggle');
-const chatBox = document.getElementById('chatBox');
-const chatClose = document.getElementById('chatClose');
-const chatInput = document.getElementById('chatInput');
-const chatSend = document.getElementById('chatSend');
+const chatToggle   = document.getElementById('chatToggle');
+const chatBox      = document.getElementById('chatBox');
+const chatClose    = document.getElementById('chatClose');
+const chatInput    = document.getElementById('chatInput');
+const chatSend     = document.getElementById('chatSend');
 const chatMessages = document.getElementById('chatMessages');
+const chatGreeting = document.getElementById('chatGreeting');
 
-chatToggle.addEventListener('click', () => chatBox.classList.remove('hidden'));
+function dismissGreeting() { chatGreeting?.classList.add('hidden'); }
+
+document.getElementById('chatGreetingClose')?.addEventListener('click', dismissGreeting);
+chatToggle.addEventListener('click', () => { chatBox.classList.remove('hidden'); dismissGreeting(); });
 chatClose.addEventListener('click', () => chatBox.classList.add('hidden'));
 
 chatSend.addEventListener('click', sendChatMessage);
