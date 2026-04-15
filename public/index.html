@@ -417,6 +417,20 @@
                                     Schedule Workouts
                                 </button>
                             </div>
+                            <!-- Preview panel — shown before agent runs -->
+                            <div id="schedulePreview" class="hidden" style="margin-top:1.25rem">
+                                <p style="font-size:0.85rem;opacity:0.7;margin-bottom:0.75rem">Review the proposed events below. Click <strong>Confirm & Add to Calendar</strong> to write them.</p>
+                                <div id="schedulePreviewTable"></div>
+                                <div class="analyse-btn-wrapper" style="margin-top:1rem;gap:0.75rem">
+                                    <button id="scheduleConfirmBtn" class="analyse-btn">
+                                        <i data-lucide="check-circle" class="analyse-btn-icon"></i>
+                                        Confirm &amp; Add to Calendar
+                                    </button>
+                                    <button id="scheduleCancelBtn" class="analyse-btn secondary">
+                                        Cancel
+                                    </button>
+                                </div>
+                            </div>
                             <div id="scheduleLoader" class="analysis-loader hidden" style="margin-top:1rem">
                                 <div class="loader-spinner"></div>
                                 <p>Scheduling into your calendar…</p>

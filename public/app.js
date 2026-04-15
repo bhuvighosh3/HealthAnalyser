@@ -5,10 +5,27 @@ function handleLogout() {
     window.location.href = '/login.html';
 }
 
+// Returns the profile key ('bhuvi', 'rishit', or '') from the stored login mode.
+// Sent as X-Profile header so the server uses the right Strava credentials
+// regardless of which Cloud Run instance handles the request.
+function getProfileKey() {
+    const mode = localStorage.getItem('athleteiq_mode') || '';
+    if (mode === 'sample_bhuvi')  return 'bhuvi';
+    if (mode === 'sample_rishit') return 'rishit';
+    return ''; // 'own' credentials — server uses tokens from /api/auth/configure
+}
+
+function apiHeaders(extra = {}) {
+    const profile = getProfileKey();
+    const h = { 'Content-Type': 'application/json', ...extra };
+    if (profile) h['X-Profile'] = profile;
+    return h;
+}
+
 document.addEventListener('DOMContentLoaded', async () => {
     try {
         // Fetch athlete profile
-        const profileRes = await fetch('/api/athlete');
+        const profileRes = await fetch('/api/athlete', { headers: apiHeaders() });
         if (!profileRes.ok) throw new Error('Failed to fetch profile');
         const athlete = await profileRes.json();
 
@@ -16,7 +33,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         renderProfile(athlete);
 
         // Fetch athlete stats
-        const statsRes = await fetch(`/api/athlete/stats/${athlete.id}`);
+        const statsRes = await fetch(`/api/athlete/stats/${athlete.id}`, { headers: apiHeaders() });
         if (!statsRes.ok) throw new Error('Failed to fetch stats');
         const stats = await statsRes.json();
 
@@ -185,7 +202,7 @@ async function sendChatMessage() {
     try {
         const response = await fetch('/api/chat', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: apiHeaders(),
             body: JSON.stringify({ message: text, id: currentAthleteId })
         });
         const data = await response.json();
@@ -281,10 +298,10 @@ async function runAnalysis() {
 
     try {
         // Fire both requests in parallel
-        const statsPromise    = fetch('/api/stats').then(r => r.json());
+        const statsPromise    = fetch('/api/stats', { headers: apiHeaders() }).then(r => r.json());
         const forecastPromise = fetch('/api/forecast', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: apiHeaders(),
             body: JSON.stringify({ age, sex, weight, height, goal, focus, target, durationWeeks, context })
         }).then(r => r.json());
 
@@ -336,7 +353,7 @@ async function runChartsOnly() {
     chartInstances = [];
 
     try {
-        const statsData = await fetch('/api/stats').then(r => r.json());
+        const statsData = await fetch('/api/stats', { headers: apiHeaders() }).then(r => r.json());
         if (statsData.error) throw new Error(statsData.error);
 
         analysisLoader.classList.add('hidden');
@@ -641,52 +658,132 @@ function initCalendarSection(plan) {
     lucide.createIcons();
 }
 
-document.addEventListener('click', async (e) => {
-    const btn = e.target.closest('#scheduleBtn');
-    if (!btn) return;
+// ── Schedule: two-phase (preview → confirm) ────────────────────────────────
+let _scheduleMeta = null; // stores { durationWeeks, startDate } for the confirm step
 
-    if (!_weeklyTrainingPlan || !_weeklyTrainingPlan.length) {
-        alert('No training plan found. Please run "Analyse My Goal" first.');
+document.addEventListener('click', async (e) => {
+    // ── Phase 1: "Schedule Workouts" → fetch preview ─────────────────────────
+    if (e.target.closest('#scheduleBtn')) {
+        const btn = e.target.closest('#scheduleBtn');
+        if (!_weeklyTrainingPlan || !_weeklyTrainingPlan.length) {
+            alert('No training plan found. Please run "Analyse My Goal" first.');
+            return;
+        }
+
+        const durationWeeks = parseInt(document.getElementById('calDurationWeeks')?.value) || 4;
+        const startDate     = document.getElementById('calStartDate')?.value || null;
+        _scheduleMeta = { durationWeeks, startDate };
+
+        btn.disabled = true;
+        const ogHtml = btn.innerHTML;
+        btn.innerHTML = '<i data-lucide="loader-2" class="analyse-btn-icon spin-icon"></i> Previewing…';
+        lucide.createIcons();
+
+        const preview  = document.getElementById('schedulePreview');
+        const loader   = document.getElementById('scheduleLoader');
+        const result   = document.getElementById('scheduleResult');
+        preview.classList.add('hidden');
+        loader.classList.add('hidden');
+        result.classList.add('hidden');
+
+        try {
+            const res  = await fetch('/api/schedule', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ weeklyTrainingPlan: _weeklyTrainingPlan, durationWeeks, startDate, preview: true })
+            });
+            const data = await res.json();
+
+            if (data.error) {
+                result.classList.remove('hidden');
+                result.innerHTML = `<div class="analysis-error"><p>${data.error}</p></div>`;
+            } else {
+                // Render preview table grouped by week
+                const byWeek = {};
+                for (const ev of data.events) {
+                    (byWeek[ev.week] = byWeek[ev.week] || []).push(ev);
+                }
+                const INTENSITY_COLOR = { easy: '#4ade80', moderate: '#facc15', hard: '#f87171' };
+                let html = '';
+                for (const [week, evs] of Object.entries(byWeek)) {
+                    html += `<p style="font-weight:600;font-size:0.8rem;opacity:0.6;margin:0.75rem 0 0.4rem;text-transform:uppercase;letter-spacing:.05em">Week ${week}</p>`;
+                    html += '<div style="display:flex;flex-direction:column;gap:0.4rem">';
+                    for (const ev of evs) {
+                        const dot = `<span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${INTENSITY_COLOR[ev.intensity]||'#94a3b8'};margin-right:6px;flex-shrink:0"></span>`;
+                        html += `<div style="display:flex;align-items:flex-start;gap:0.5rem;padding:0.55rem 0.75rem;background:rgba(255,255,255,0.04);border-radius:8px;border:1px solid rgba(255,255,255,0.07)">
+                            <div style="min-width:90px;font-size:0.78rem;opacity:0.55">${ev.date}<br>${ev.startTime}–${ev.endTime}</div>
+                            <div style="flex:1;font-size:0.83rem">${dot}<strong>${ev.day}</strong> — ${ev.workout}</div>
+                            <div style="font-size:0.75rem;opacity:0.45;white-space:nowrap">${ev.duration}</div>
+                        </div>`;
+                    }
+                    html += '</div>';
+                }
+                document.getElementById('schedulePreviewTable').innerHTML = html;
+                preview.classList.remove('hidden');
+                lucide.createIcons();
+            }
+        } catch (err) {
+            result.classList.remove('hidden');
+            result.innerHTML = `<div class="analysis-error"><p>Preview failed: ${err.message}</p></div>`;
+        } finally {
+            btn.disabled = false;
+            btn.innerHTML = ogHtml;
+            lucide.createIcons();
+        }
         return;
     }
 
-    const durationWeeks = parseInt(document.getElementById('calDurationWeeks')?.value) || 4;
-    const startDate     = document.getElementById('calStartDate')?.value || null;
+    // ── Phase 2: "Confirm & Add to Calendar" → run the agent ─────────────────
+    if (e.target.closest('#scheduleConfirmBtn')) {
+        const confirmBtn = e.target.closest('#scheduleConfirmBtn');
+        const cancelBtn  = document.getElementById('scheduleCancelBtn');
+        const preview    = document.getElementById('schedulePreview');
+        const loader     = document.getElementById('scheduleLoader');
+        const result     = document.getElementById('scheduleResult');
 
-    btn.disabled = true;
-    const ogHtml = btn.innerHTML;
-    btn.innerHTML = '<i data-lucide="loader-2" class="analyse-btn-icon spin-icon"></i> Scheduling…';
-    lucide.createIcons();
-
-    const loader = document.getElementById('scheduleLoader');
-    const result = document.getElementById('scheduleResult');
-    loader.classList.remove('hidden');
-    result.classList.add('hidden');
-
-    try {
-        const res = await fetch('/api/schedule', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ weeklyTrainingPlan: _weeklyTrainingPlan, durationWeeks, startDate })
-        });
-        const data = await res.json();
-
-        loader.classList.add('hidden');
-        result.classList.remove('hidden');
-
-        if (data.error) {
-            result.innerHTML = `<div class="analysis-error"><p>${data.error}</p>${data.hint ? `<p style="margin-top:.5rem;opacity:.7">${data.hint}</p>` : ''}</div>`;
-        } else {
-            result.innerHTML = `<div class="coach-note glass-panel" style="white-space:pre-wrap">${data.summary}</div>`;
-        }
-    } catch (err) {
-        loader.classList.add('hidden');
-        result.classList.remove('hidden');
-        result.innerHTML = `<div class="analysis-error"><p>Scheduling failed: ${err.message}</p></div>`;
-    } finally {
-        btn.disabled = false;
-        btn.innerHTML = ogHtml;
+        confirmBtn.disabled = true;
+        cancelBtn.disabled  = true;
+        const ogHtml = confirmBtn.innerHTML;
+        confirmBtn.innerHTML = '<i data-lucide="loader-2" class="analyse-btn-icon spin-icon"></i> Adding to Calendar…';
         lucide.createIcons();
+
+        loader.classList.remove('hidden');
+        result.classList.add('hidden');
+
+        const { durationWeeks, startDate } = _scheduleMeta || {};
+        try {
+            const res  = await fetch('/api/schedule', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ weeklyTrainingPlan: _weeklyTrainingPlan, durationWeeks, startDate })
+            });
+            const data = await res.json();
+
+            loader.classList.add('hidden');
+            preview.classList.add('hidden');
+            result.classList.remove('hidden');
+
+            if (data.error) {
+                result.innerHTML = `<div class="analysis-error"><p>${data.error}</p>${data.hint ? `<p style="margin-top:.5rem;opacity:.7">${data.hint}</p>` : ''}</div>`;
+            } else {
+                result.innerHTML = `<div class="coach-note glass-panel" style="white-space:pre-wrap">${data.summary}</div>`;
+            }
+        } catch (err) {
+            loader.classList.add('hidden');
+            result.classList.remove('hidden');
+            result.innerHTML = `<div class="analysis-error"><p>Scheduling failed: ${err.message}</p></div>`;
+        } finally {
+            confirmBtn.disabled = false;
+            cancelBtn.disabled  = false;
+            confirmBtn.innerHTML = ogHtml;
+            lucide.createIcons();
+        }
+        return;
+    }
+
+    // ── Cancel preview ────────────────────────────────────────────────────────
+    if (e.target.closest('#scheduleCancelBtn')) {
+        document.getElementById('schedulePreview').classList.add('hidden');
     }
 });
 

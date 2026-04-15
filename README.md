@@ -12,7 +12,7 @@
 **File:** `controllers/forecastController.js` — top of `exports.forecast`
 
 At runtime, the agent fetches from the Strava REST API:
-- `/athlete/activities?per_page=50` — full activity history (distance, pace, HR, elevation, suffer score)
+- `/athlete/activities?per_page=200` — full activity history (distance, pace, HR, elevation, suffer score)
 - `/athlete` — athlete profile
 - `/athletes/:id/stats` — all-time and YTD aggregates
 
@@ -104,6 +104,10 @@ flowchart TD
     FC[Firecrawl /search\nHopkins · WHO · Harvard] -->|first run only| Firestore
     OUT -->|user presses button| NUT
     NUT --> NUTOUT[Personalised nutrition plan\ngrounded in authoritative sources]
+
+    OUT -->|user presses Schedule| PREVIEW[Human-in-the-loop\nPreview proposed events\ndate · time · intensity]
+    PREVIEW -->|user confirms| CAL{Calendar Scheduling Agent\nADK LlmAgent + Calendar MCPToolset}
+    CAL --> CALEVENTS[Events created in\nGoogle Calendar]
 ```
 
 ---
@@ -130,6 +134,7 @@ flowchart TD
 | Iterative refinement loop | ✅ | ADK `runAgent` event loop; EDA FunctionTool; Calendar MCPToolset multi-round |
 | RAG | ✅ | Firecrawl → Vertex AI embeddings → Firestore vector store → `findNearest` semantic search → Nutrition Agent |
 | Login / multi-account | ✅ | Login page with own-credentials mode and two sample profiles with real data |
+| Human-in-the-loop | ✅ | Calendar scheduling preview — proposed events shown for user approval before agent writes to Google Calendar |
 
 ---
 
@@ -173,7 +178,7 @@ Chunks are crawled **once per 7 days per goal category** and stored in Firestore
 flowchart LR
     MSG([User message]) --> ROUTER{Router\nfew-shot classify}
     ROUTER -->|greeting| GREET[Friendly welcome reply]
-    ROUTER -->|strava| MCP[ADK LlmAgent + MCPToolset\nPre-fetched REST context\n+ 50 activities + YTD stats]
+    ROUTER -->|strava| MCP[ADK LlmAgent + MCPToolset\nPre-fetched REST context\n+ 200 activities + YTD stats]
     ROUTER -->|fitness| SEARCH[ADK LlmAgent + GOOGLE_SEARCH\nFitness knowledge]
     ROUTER -->|off-topic| REFUSE[Instant refusal]
     MCP --> REPLY([Rendered reply])

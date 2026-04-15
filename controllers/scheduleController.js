@@ -7,6 +7,51 @@ exports.calendarStatus = (req, res) => {
     res.json({ configured: isCalendarConfigured() });
 };
 
+// ── Preview: compute proposed events without running the agent ────────────────
+const DAY_INDEX = { sunday: 0, monday: 1, tuesday: 2, wednesday: 3, thursday: 4, friday: 5, saturday: 6 };
+const INTENSITY_DURATION_MIN = { easy: 40, moderate: 60, hard: 80, rest: 0 };
+const INTENSITY_START_TIME   = { easy: '07:00', moderate: '06:30', hard: '06:00' };
+
+function computePreviewEvents(weeklyTrainingPlan, durationWeeks, startDateStr) {
+    const start = startDateStr ? new Date(startDateStr) : new Date();
+    const dayOfWeek = start.getDay();
+    const daysToMonday = dayOfWeek === 0 ? 1 : (8 - dayOfWeek) % 7 || 7;
+    start.setDate(start.getDate() + daysToMonday);
+    start.setHours(0, 0, 0, 0);
+
+    const events = [];
+    for (let week = 0; week < durationWeeks; week++) {
+        for (const session of weeklyTrainingPlan) {
+            if (session.intensity === 'rest') continue;
+            const dayIdx = DAY_INDEX[session.day.toLowerCase()];
+            if (dayIdx === undefined) continue;
+            const offsetFromMonday = dayIdx === 0 ? 6 : dayIdx - 1;
+            const date = new Date(start);
+            date.setDate(start.getDate() + week * 7 + offsetFromMonday);
+            const dateStr = date.toISOString().slice(0, 10);
+            const durationMin = INTENSITY_DURATION_MIN[session.intensity] || 45;
+            const startTime   = INTENSITY_START_TIME[session.intensity]   || '07:00';
+            const [h, m] = startTime.split(':').map(Number);
+            const endH = Math.floor((h * 60 + m + durationMin) / 60);
+            const endM = (h * 60 + m + durationMin) % 60;
+            const endTime = `${String(endH).padStart(2, '0')}:${String(endM).padStart(2, '0')}`;
+            events.push({
+                week: week + 1,
+                date: dateStr,
+                day: session.day,
+                title: `🏃 ${session.workout.split(/[-–]/)[0].trim()} – ${session.duration}`,
+                workout: session.workout,
+                duration: session.duration,
+                intensity: session.intensity,
+                purpose: session.purpose,
+                startTime,
+                endTime,
+            });
+        }
+    }
+    return events;
+}
+
 // ── Schedule workouts into Google Calendar (ADK-powered) ─────────────────────
 exports.schedule = async (req, res) => {
     if (!isCalendarConfigured()) {
@@ -22,9 +67,15 @@ exports.schedule = async (req, res) => {
         });
     }
 
-    const { weeklyTrainingPlan, durationWeeks = 4, startDate } = req.body;
+    const { weeklyTrainingPlan, durationWeeks = 4, startDate, preview = false } = req.body;
     if (!weeklyTrainingPlan || !weeklyTrainingPlan.length) {
         return res.status(400).json({ error: 'weeklyTrainingPlan is required.' });
+    }
+
+    // ── Human-in-the-loop: return proposed events before writing to agent ─────
+    if (preview) {
+        const events = computePreviewEvents(weeklyTrainingPlan, durationWeeks, startDate);
+        return res.json({ events });
     }
 
     try {
