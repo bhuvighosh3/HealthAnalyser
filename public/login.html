@@ -295,15 +295,15 @@
                     const card = document.getElementById(`pc-${key}`);
                     if (!card) continue;
 
-                    // Avatar
+                    // Avatar — only swap once the image has actually loaded
                     const placeholder = card.querySelector('.profile-avatar-placeholder');
-                    if (info.avatar) {
+                    if (info.avatar && placeholder) {
                         const img = document.createElement('img');
-                        img.src = info.avatar;
-                        img.alt = info.name;
                         img.className = 'profile-avatar';
-                        img.onerror = () => {};   // keep placeholder on error
-                        placeholder.replaceWith(img);
+                        img.alt       = info.name;
+                        img.onload    = () => placeholder.replaceWith(img);
+                        img.onerror   = () => {}; // keep placeholder SVG on failure
+                        img.src       = info.avatar; // set last to trigger load
                     }
 
                     // Name + location

@@ -14,11 +14,11 @@ const { initDatabase }       = require('../db/database');
 const SAMPLE_PROFILES = {
     bhuvi: {
         name:   'Bhuvi',
-        ACCESS_TOKEN:  process.env.STRAVA_ACCESS_TOKEN,
-        REFRESH_TOKEN: process.env.STRAVA_REFRESH_TOKEN,
-        EXPIRES_AT:    process.env.STRAVA_EXPIRES_AT,
-        CLIENT_ID:     process.env.STRAVA_CLIENT_ID,
-        CLIENT_SECRET: process.env.STRAVA_CLIENT_SECRET,
+        ACCESS_TOKEN:  process.env.BHUVI_ACCESS_TOKEN,
+        REFRESH_TOKEN: process.env.BHUVI_REFRESH_TOKEN,
+        EXPIRES_AT:    process.env.BHUVI_EXPIRES_AT,
+        CLIENT_ID:     process.env.BHUVI_CLIENT_ID,
+        CLIENT_SECRET: process.env.BHUVI_CLIENT_SECRET,
     },
     rishit: {
         name:   'Rishit',
@@ -51,11 +51,11 @@ exports.getProfiles = async (req, res) => {
 
         try {
             swapTokens({
-                STRAVA_ACCESS_TOKEN:  p.ACCESS_TOKEN,
-                STRAVA_REFRESH_TOKEN: p.REFRESH_TOKEN  || '',
-                STRAVA_EXPIRES_AT:    p.EXPIRES_AT     || '',
-                STRAVA_CLIENT_ID:     p.CLIENT_ID      || '',
-                STRAVA_CLIENT_SECRET: p.CLIENT_SECRET  || '',
+                BHUVI_ACCESS_TOKEN:  p.ACCESS_TOKEN,
+                BHUVI_REFRESH_TOKEN: p.REFRESH_TOKEN  || '',
+                BHUVI_EXPIRES_AT:    p.EXPIRES_AT     || '',
+                BHUVI_CLIENT_ID:     p.CLIENT_ID      || '',
+                BHUVI_CLIENT_SECRET: p.CLIENT_SECRET  || '',
             });
             const athlete = await fetchFromStrava('/athlete');
             const info = {
@@ -76,11 +76,11 @@ exports.getProfiles = async (req, res) => {
     // Restore whichever token was active before
     const b = SAMPLE_PROFILES.bhuvi;
     swapTokens({
-        STRAVA_ACCESS_TOKEN:  tokens.ACCESS_TOKEN  || b.ACCESS_TOKEN  || '',
-        STRAVA_REFRESH_TOKEN: tokens.REFRESH_TOKEN || b.REFRESH_TOKEN || '',
-        STRAVA_EXPIRES_AT:    tokens.EXPIRES_AT    || b.EXPIRES_AT    || '',
-        STRAVA_CLIENT_ID:     tokens.CLIENT_ID     || b.CLIENT_ID     || '',
-        STRAVA_CLIENT_SECRET: tokens.CLIENT_SECRET || b.CLIENT_SECRET || '',
+        BHUVI_ACCESS_TOKEN:  tokens.ACCESS_TOKEN  || b.ACCESS_TOKEN  || '',
+        BHUVI_REFRESH_TOKEN: tokens.REFRESH_TOKEN || b.REFRESH_TOKEN || '',
+        BHUVI_EXPIRES_AT:    tokens.EXPIRES_AT    || b.EXPIRES_AT    || '',
+        BHUVI_CLIENT_ID:     tokens.CLIENT_ID     || b.CLIENT_ID     || '',
+        BHUVI_CLIENT_SECRET: tokens.CLIENT_SECRET || b.CLIENT_SECRET || '',
     });
 
     res.json(results);
@@ -96,12 +96,13 @@ exports.useSample = async (req, res) => {
     if (!p.ACCESS_TOKEN) return res.status(500).json({ error: `No credentials configured for "${key}".` });
 
     try {
+        const prefix = key === 'rishit' ? 'RISHIT' : 'BHUVI';
         updateEnv({
-            STRAVA_ACCESS_TOKEN:  p.ACCESS_TOKEN,
-            STRAVA_REFRESH_TOKEN: p.REFRESH_TOKEN  || '',
-            STRAVA_EXPIRES_AT:    p.EXPIRES_AT     || '',
-            STRAVA_CLIENT_ID:     p.CLIENT_ID      || '',
-            STRAVA_CLIENT_SECRET: p.CLIENT_SECRET  || '',
+            [`${prefix}_ACCESS_TOKEN`]:  p.ACCESS_TOKEN,
+            [`${prefix}_REFRESH_TOKEN`]: p.REFRESH_TOKEN  || '',
+            [`${prefix}_EXPIRES_AT`]:    p.EXPIRES_AT     || '',
+            [`${prefix}_CLIENT_ID`]:     p.CLIENT_ID      || '',
+            [`${prefix}_CLIENT_SECRET`]: p.CLIENT_SECRET  || '',
         });
 
         await initDatabase();
@@ -120,11 +121,11 @@ exports.configure = async (req, res) => {
 
     try {
         updateEnv({
-            STRAVA_ACCESS_TOKEN:  accessToken,
-            STRAVA_REFRESH_TOKEN: refreshToken || '',
-            STRAVA_EXPIRES_AT:    String(Math.floor(Date.now() / 1000) + 21600),
-            ...(clientId     && { STRAVA_CLIENT_ID:     clientId }),
-            ...(clientSecret && { STRAVA_CLIENT_SECRET: clientSecret }),
+            BHUVI_ACCESS_TOKEN:  accessToken,
+            BHUVI_REFRESH_TOKEN: refreshToken || '',
+            BHUVI_EXPIRES_AT:    String(Math.floor(Date.now() / 1000) + 21600),
+            ...(clientId     && { BHUVI_CLIENT_ID:     clientId }),
+            ...(clientSecret && { BHUVI_CLIENT_SECRET: clientSecret }),
         });
         await initDatabase();
         res.json({ ok: true, message: 'Credentials configured — using your Strava account.' });

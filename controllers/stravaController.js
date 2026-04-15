@@ -5,11 +5,11 @@ exports.authorize = (req, res) => {
     const profile = (req.query.profile || '').toLowerCase();
     const clientId = profile === 'rishit'
         ? process.env.RISHIT_CLIENT_ID
-        : process.env.STRAVA_CLIENT_ID;
+        : process.env.BHUVI_CLIENT_ID;
     const host = process.env.APP_URL || `http://${req.headers.host}`;
     const redirectUri = `${host}/exchange_token`;
     const state = profile === 'rishit' ? '&state=rishit' : '';
-    const authUrl = `http://www.strava.com/oauth/authorize?client_id=${clientId}&response_type=code&redirect_uri=${encodeURIComponent(redirectUri)}&approval_prompt=force&scope=activity:read_all,read${state}`;
+    const authUrl = `http://www.strava.com/oauth/authorize?client_id=${clientId}&response_type=code&redirect_uri=${encodeURIComponent(redirectUri)}&approval_prompt=force&scope=read,activity:read_all,profile:read_all${state}`;
     res.redirect(authUrl);
 };
 
@@ -38,9 +38,9 @@ exports.exchangeToken = async (req, res) => {
                 // Re-init DB with new tokens
                 const { initDatabase } = require('../db/database');
                 updateTokens({
-                    STRAVA_ACCESS_TOKEN:  tokenData.access_token,
-                    STRAVA_REFRESH_TOKEN: tokenData.refresh_token,
-                    STRAVA_EXPIRES_AT:    tokenData.expires_at,
+                    BHUVI_ACCESS_TOKEN:  tokenData.access_token,
+                    BHUVI_REFRESH_TOKEN: tokenData.refresh_token,
+                    BHUVI_EXPIRES_AT:    tokenData.expires_at,
                 });
                 await initDatabase();
             }

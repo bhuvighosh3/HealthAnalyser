@@ -4,11 +4,11 @@ const { resetMcpClient } = require('./mcpService');
 
 // ── Global token store (mutated on profile switch / token refresh) ─────────────
 const tokens = {
-    ACCESS_TOKEN: process.env.STRAVA_ACCESS_TOKEN,
-    REFRESH_TOKEN: process.env.STRAVA_REFRESH_TOKEN,
-    EXPIRES_AT: process.env.STRAVA_EXPIRES_AT,
-    CLIENT_ID: process.env.STRAVA_CLIENT_ID,
-    CLIENT_SECRET: process.env.STRAVA_CLIENT_SECRET
+    ACCESS_TOKEN: process.env.BHUVI_ACCESS_TOKEN,
+    REFRESH_TOKEN: process.env.BHUVI_REFRESH_TOKEN,
+    EXPIRES_AT: process.env.BHUVI_EXPIRES_AT,
+    CLIENT_ID: process.env.BHUVI_CLIENT_ID,
+    CLIENT_SECRET: process.env.BHUVI_CLIENT_SECRET
 };
 
 // ── Per-request token context (avoids multi-instance / race-condition issues) ──
@@ -21,11 +21,11 @@ const requestTokenStore = new AsyncLocalStorage();
 // so a rotating refresh on either profile keeps both in sync and neither
 // ends up holding a stale, invalidated refresh token.
 const _builtinBhuvi = {
-    ACCESS_TOKEN:  process.env.STRAVA_ACCESS_TOKEN,
-    REFRESH_TOKEN: process.env.STRAVA_REFRESH_TOKEN,
-    EXPIRES_AT:    process.env.STRAVA_EXPIRES_AT,
-    CLIENT_ID:     process.env.STRAVA_CLIENT_ID,
-    CLIENT_SECRET: process.env.STRAVA_CLIENT_SECRET,
+    ACCESS_TOKEN:  process.env.BHUVI_ACCESS_TOKEN,
+    REFRESH_TOKEN: process.env.BHUVI_REFRESH_TOKEN,
+    EXPIRES_AT:    process.env.BHUVI_EXPIRES_AT,
+    CLIENT_ID:     process.env.BHUVI_CLIENT_ID,
+    CLIENT_SECRET: process.env.BHUVI_CLIENT_SECRET,
 };
 
 const _builtinRishit = {
@@ -51,9 +51,9 @@ const PROFILE_TOKENS = {
 function updateEnv(newTokens) {
     // Always update in-memory tokens first (works in all environments)
     for (const [key, value] of Object.entries(newTokens)) {
-        if (key === 'STRAVA_ACCESS_TOKEN')  tokens.ACCESS_TOKEN  = value;
-        if (key === 'STRAVA_REFRESH_TOKEN') tokens.REFRESH_TOKEN = value;
-        if (key === 'STRAVA_EXPIRES_AT')    tokens.EXPIRES_AT    = value;
+        if (key === 'BHUVI_ACCESS_TOKEN')  tokens.ACCESS_TOKEN  = value;
+        if (key === 'BHUVI_REFRESH_TOKEN') tokens.REFRESH_TOKEN = value;
+        if (key === 'BHUVI_EXPIRES_AT')    tokens.EXPIRES_AT    = value;
     }
     // Persist to .env when running locally — silently skip in cloud environments
     try {
@@ -95,9 +95,9 @@ async function ensureValidToken() {
         if (data.access_token) {
             // Always overwrite with newest tokens (refresh_token rotates on each refresh)
             updateEnv({
-                STRAVA_ACCESS_TOKEN:  data.access_token,
-                STRAVA_REFRESH_TOKEN: data.refresh_token,
-                STRAVA_EXPIRES_AT:    data.expires_at
+                BHUVI_ACCESS_TOKEN:  data.access_token,
+                BHUVI_REFRESH_TOKEN: data.refresh_token,
+                BHUVI_EXPIRES_AT:    data.expires_at
             });
             resetMcpClient();
             console.log(`✅ Token refreshed — expires in ${data.expires_in}s`);
@@ -135,7 +135,15 @@ async function ensureValidProfileToken(profileTokens) {
             profileTokens.ACCESS_TOKEN  = data.access_token;
             profileTokens.REFRESH_TOKEN = data.refresh_token;
             profileTokens.EXPIRES_AT    = String(data.expires_at);
-            console.log(`✅ Profile token refreshed — expires in ${data.expires_in}s`);
+            // Determine prefix from CLIENT_ID so the right env var is written back
+            const prefix = profileTokens.CLIENT_ID === process.env.RISHIT_CLIENT_ID
+                ? 'RISHIT' : 'BHUVI';
+            updateEnv({
+                [`${prefix}_ACCESS_TOKEN`]:  data.access_token,
+                [`${prefix}_REFRESH_TOKEN`]: data.refresh_token,
+                [`${prefix}_EXPIRES_AT`]:    data.expires_at,
+            });
+            console.log(`✅ Profile token refreshed (${prefix}) — expires in ${data.expires_in}s`);
         } else {
             console.error('Profile token refresh failed:', data);
         }

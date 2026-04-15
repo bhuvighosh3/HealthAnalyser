@@ -237,14 +237,14 @@ npm install   # postinstall automatically patches strava-mcp-server weight field
 
 ### 2. Environment variables — `.env`
 ```env
-# Sample Profile 1 (primary Strava account)
-STRAVA_CLIENT_ID=...
-STRAVA_CLIENT_SECRET=...
-STRAVA_ACCESS_TOKEN=
-STRAVA_REFRESH_TOKEN=
-STRAVA_EXPIRES_AT=
+# Sample Profile 1 — Bhuvi's Strava account
+BHUVI_CLIENT_ID=...
+BHUVI_CLIENT_SECRET=...
+BHUVI_ACCESS_TOKEN=
+BHUVI_REFRESH_TOKEN=
+BHUVI_EXPIRES_AT=
 
-# Sample Profile 2 (second Strava account)
+# Sample Profile 2 — Rishit's Strava account
 RISHIT_CLIENT_ID=...
 RISHIT_CLIENT_SECRET=...
 RISHIT_ACCESS_TOKEN=
