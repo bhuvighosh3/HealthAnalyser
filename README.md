@@ -183,21 +183,6 @@ These are collected **after** the RAG retrieval runs (so they do not affect whic
 
 ## Google Calendar Scheduling
 
-```mermaid
-flowchart LR
-    USER([User]) -->|1. Pick start date & weeks| UI[Calendar Section]
-    UI -->|2. Connect Google Calendar| OAUTH[Google OAuth Popup]
-    OAUTH -->|3. User signs in with own Google account| GOOGLE[Google Consent Screen]
-    GOOGLE -->|4. Auth code| CB[/auth/google-calendar/callback]
-    CB -->|5. Store tokens in Firestore gcal_sessions| FS[(Firestore)]
-    UI -->|6. Schedule Workouts| API[POST /api/calendar/schedule]
-    API -->|7. Read existing events| GCAL[Google Calendar API]
-    GCAL -->|8. Busy times| API
-    API -->|9. Find free slots 6:30am · 5:30pm · 7am · 6pm| SLOTS[Slot finder]
-    SLOTS -->|10. Create events in free slots| GCAL
-    GCAL --> RESULT([Workouts added to user's calendar])
-```
-
 - Each user connects their **own** Google account — events go to their calendar, not the app owner's
 - Sessions stored in Firestore (`gcal_sessions`) — survive page refreshes and server restarts
 - Only schedules at reasonable hours: 6:30am, 5:30pm, 7:00am, 6:00pm — no odd night times
