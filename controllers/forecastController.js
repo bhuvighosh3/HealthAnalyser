@@ -347,22 +347,27 @@ Return ONLY a valid JSON object (no markdown, no code fences):
 {
   "weeklyTrainingPlan": [
     {
-      "day": "<day name>",
-      "workout": "<specific workout description>",
-      "duration": "<e.g. 45 min>",
-      "intensity": "easy" | "moderate" | "hard" | "rest",
-      "targetHR": "<e.g. 130–145 bpm or N/A>",
-      "purpose": "<why this session>"
+      "week": <week number starting at 1>,
+      "days": [
+        {
+          "day": "<day name e.g. Monday>",
+          "workout": "<specific workout description>",
+          "duration": "<e.g. 45 min>",
+          "intensity": "easy" | "moderate" | "hard" | "rest",
+          "targetHR": "<e.g. 130–145 bpm or N/A>",
+          "purpose": "<why this session>"
+        }
+      ]
     }
   ],
   "recoveryAdvice": [
     { "title": "<title>", "detail": "<specific advice>" }
   ],
   "weeklyTargets": {
-    "distanceKm": <number>,
-    "kcal": <number>,
-    "activeHours": <number>,
-    "longRunKm": <number>
+    "distanceKm": <single number — peak weekly distance km by end of plan, NOT a list>,
+    "kcal": <single number — peak weekly calories burned, NOT a list>,
+    "activeHours": <single number — peak weekly active hours, NOT a list>,
+    "longRunKm": <single number — peak long run distance km, NOT a list>
   },
   "milestones": [
     { "week": <number>, "target": "<measurable milestone>" }

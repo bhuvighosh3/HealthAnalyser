@@ -565,31 +565,39 @@ function renderForecastResults({ hypothesis, recommendations, edaSummary, weekly
     document.getElementById('coachNote').textContent = recommendations.coachNote || '';
 
     // 6. Weekly targets
-    const wt = recommendations.weeklyTargets || {};
+    // Safety: AI occasionally returns comma-separated progressions — take the last (peak) value
+    const parseTarget = v => {
+        if (v == null) return null;
+        const s = String(v);
+        return s.includes(',') ? parseFloat(s.split(',').pop()) : parseFloat(s);
+    };
+    const rawWt = recommendations.weeklyTargets || {};
+    const wt = {
+        distanceKm:  parseTarget(rawWt.distanceKm),
+        kcal:        parseTarget(rawWt.kcal),
+        activeHours: parseTarget(rawWt.activeHours),
+        longRunKm:   parseTarget(rawWt.longRunKm),
+    };
     document.getElementById('weeklyTargets').innerHTML = `
         <p class="sub-title">Weekly Targets</p>
         <div class="targets-row">
-            <div class="target-chip"><div class="t-val">${wt.distanceKm ?? '—'} km</div><div class="t-label">Distance</div></div>
-            <div class="target-chip"><div class="t-val">${wt.kcal ? Number(wt.kcal).toLocaleString() : '—'}</div><div class="t-label">Calories</div></div>
-            <div class="target-chip"><div class="t-val">${wt.activeHours ?? '—'} hrs</div><div class="t-label">Active Time</div></div>
-            <div class="target-chip"><div class="t-val">${wt.longRunKm ?? '—'} km</div><div class="t-label">Long Run</div></div>
+            <div class="target-chip"><div class="t-val">${wt.distanceKm != null ? wt.distanceKm + ' km' : '—'}</div><div class="t-label">Distance</div></div>
+            <div class="target-chip"><div class="t-val">${wt.kcal != null ? Math.round(wt.kcal).toLocaleString() + ' kcal' : '—'}</div><div class="t-label">Calories</div></div>
+            <div class="target-chip"><div class="t-val">${wt.activeHours != null ? wt.activeHours + ' hrs' : '—'}</div><div class="t-label">Active Time</div></div>
+            <div class="target-chip"><div class="t-val">${wt.longRunKm != null ? wt.longRunKm + ' km' : '—'}</div><div class="t-label">Long Run</div></div>
         </div>`;
 
     // 7. Training plan
-    const plan = recommendations.weeklyTrainingPlan || [];
-    initCalendarSection(plan);
-    initDownloadButton(plan, recommendations, hypothesis);
+    // Support both week-group format [{ week, days }] and legacy flat format [{ day, workout, ... }]
+    const rawPlan = recommendations.weeklyTrainingPlan || [];
+    const planWeeks = rawPlan.length && rawPlan[0].days
+        ? rawPlan
+        : [{ week: 1, days: rawPlan }];
+    const flatPlan = planWeeks.flatMap(w => w.days || []);
+    initCalendarSection(flatPlan);
+    initDownloadButton(flatPlan, recommendations, hypothesis);
     initNutritionSection(forecastData.weeklySummary);
-    document.getElementById('trainingPlan').innerHTML = `
-        <p class="sub-title">Weekly Training Plan</p>
-        ${plan.map(d => `
-            <div class="plan-day">
-                <span class="plan-day-name">${d.day}</span>
-                <span class="plan-workout">${d.workout}
-                    <small>${d.duration}${d.targetHR && d.targetHR !== 'N/A' ? ' · ' + d.targetHR : ''} · ${d.purpose}</small>
-                </span>
-                <span class="plan-intensity intensity-${(d.intensity||'moderate').toLowerCase()}">${d.intensity||''}</span>
-            </div>`).join('')}`;
+    renderTrainingPlanWeek(planWeeks, 0);
 
     // 8. Recovery
     const recovery = recommendations.recoveryAdvice || [];
@@ -620,6 +628,36 @@ function stateMetrics(pairs) {
 function truncate(str, n) {
     return str.length > n ? str.slice(0, n) + '…' : str;
 }
+
+// ── Week-by-week training plan renderer ──────────────────────────────────────
+function renderTrainingPlanWeek(planWeeks, idx) {
+    const el = document.getElementById('trainingPlan');
+    if (!el) return;
+    const week = planWeeks[idx];
+    const days = week?.days || [];
+    const total = planWeeks.length;
+    el.innerHTML = `
+        <p class="sub-title">Weekly Training Plan</p>
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:.75rem;">
+            <button onclick="renderTrainingPlanWeek(_currentPlanWeeks, Math.max(0, _currentPlanWeekIdx - 1))"
+                style="background:var(--glass-bg);border:1px solid var(--glass-border);color:var(--text-primary);padding:.35rem .85rem;border-radius:8px;cursor:pointer;font-size:.85rem;opacity:${idx === 0 ? '.35' : '1'};pointer-events:${idx === 0 ? 'none' : 'auto'}">← Prev</button>
+            <span style="font-weight:600;color:var(--accent)">Week ${week?.week ?? idx + 1} of ${total}</span>
+            <button onclick="renderTrainingPlanWeek(_currentPlanWeeks, Math.min(_currentPlanWeeks.length - 1, _currentPlanWeekIdx + 1))"
+                style="background:var(--glass-bg);border:1px solid var(--glass-border);color:var(--text-primary);padding:.35rem .85rem;border-radius:8px;cursor:pointer;font-size:.85rem;opacity:${idx === total - 1 ? '.35' : '1'};pointer-events:${idx === total - 1 ? 'none' : 'auto'}">Next →</button>
+        </div>
+        ${days.map(d => `
+            <div class="plan-day">
+                <span class="plan-day-name">${d.day}</span>
+                <span class="plan-workout">${d.workout}
+                    <small>${d.duration}${d.targetHR && d.targetHR !== 'N/A' ? ' · ' + d.targetHR : ''} · ${d.purpose}</small>
+                </span>
+                <span class="plan-intensity intensity-${(d.intensity||'moderate').toLowerCase()}">${d.intensity||''}</span>
+            </div>`).join('')}`;
+    _currentPlanWeeks = planWeeks;
+    _currentPlanWeekIdx = idx;
+}
+let _currentPlanWeeks = [];
+let _currentPlanWeekIdx = 0;
 
 // ── Download Training Plan as CSV ─────────────────────────────────────────────
 function initDownloadButton(plan, recommendations, hypothesis) {
