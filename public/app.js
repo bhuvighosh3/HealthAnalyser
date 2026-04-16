@@ -810,10 +810,6 @@ document.addEventListener('click', async (e) => {
 
     // ── Phase 2: "Confirm & Add to Calendar" → run the agent ─────────────────
     if (e.target.closest('#scheduleConfirmBtn')) {
-        if (!_gcalConnected) {
-            alert('Please connect your Google Calendar first using the button above.');
-            return;
-        }
         const confirmBtn = e.target.closest('#scheduleConfirmBtn');
         const cancelBtn  = document.getElementById('scheduleCancelBtn');
         const preview    = document.getElementById('schedulePreview');
@@ -832,8 +828,7 @@ document.addEventListener('click', async (e) => {
         const { durationWeeks, startDate } = _scheduleMeta || {};
         try {
             // Use new per-user OAuth endpoint if connected, else fall back to MCP-based
-            const endpoint = _gcalConnected ? '/api/calendar/schedule' : '/api/schedule';
-            const res  = await fetch(endpoint, {
+            const res  = await fetch('/api/calendar/schedule', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 credentials: 'same-origin',
@@ -845,7 +840,10 @@ document.addEventListener('click', async (e) => {
             preview.classList.add('hidden');
             result.classList.remove('hidden');
 
-            if (data.error) {
+            if (res.status === 401) {
+                result.innerHTML = `<div class="analysis-error"><p>Please connect your Google Calendar first.</p><p style="margin-top:.5rem;opacity:.7">Use the <strong>Connect Google Calendar</strong> button above, then try again.</p></div>`;
+                await refreshGcalStatus();
+            } else if (data.error) {
                 result.innerHTML = `<div class="analysis-error"><p>${data.error}</p>${data.hint ? `<p style="margin-top:.5rem;opacity:.7">${data.hint}</p>` : ''}</div>`;
             } else {
                 result.innerHTML = `<div class="coach-note glass-panel" style="white-space:pre-wrap">${data.summary}</div>`;

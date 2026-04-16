@@ -106,8 +106,8 @@ flowchart TD
     NUT --> NUTOUT[Personalised nutrition plan\ngrounded in authoritative sources]
 
     OUT -->|user presses Schedule| PREVIEW[Human-in-the-loop\nPreview proposed events\ndate · time · intensity]
-    PREVIEW -->|user confirms| CAL{Calendar Scheduling Agent\nADK LlmAgent + Calendar MCPToolset}
-    CAL --> CALEVENTS[Events created in\nGoogle Calendar]
+    PREVIEW -->|user confirms| CAL{Calendar Scheduling\nGoogle Calendar API\nreads free slots · writes events}
+    CAL --> CALEVENTS[Workouts scheduled in\nuser's own Google Calendar]
 ```
 
 ---
@@ -264,11 +264,25 @@ npm start
 # Sample Profile 2: http://localhost:3000/auth?profile=rishit
 ```
 
-### 4. Google Calendar (optional)
-Create `gcp-oauth.keys.json` with your OAuth 2.0 Desktop credentials, set `GOOGLE_OAUTH_CREDENTIALS` in `.env`, then:
-```bash
-GOOGLE_OAUTH_CREDENTIALS=/path/to/gcp-oauth.keys.json npx @cocal/google-calendar-mcp auth
+### 4. Google Calendar (per-user OAuth)
+Create a **Web Application** OAuth 2.0 client in [Google Cloud Console → APIs & Services → Credentials](https://console.cloud.google.com/apis/credentials).
+
+Add these redirect URIs:
 ```
+http://localhost:3000/auth/google-calendar/callback
+https://<your-cloud-run-url>/auth/google-calendar/callback
+```
+
+Add to `.env`:
+```env
+GOOGLE_CLIENT_ID=<web client id>
+GOOGLE_CLIENT_SECRET=<web client secret>
+GOOGLE_REDIRECT_URI=https://<your-cloud-run-url>/auth/google-calendar/callback
+```
+
+Publish the OAuth app (APIs & Services → OAuth consent screen → Audience → Publishing status → In production) so any Google account can connect.
+
+Each user clicks **Connect Google Calendar** in the app → authenticates with their own Google account → workouts are scheduled into **their** calendar. Sessions are stored in Firestore (`gcal_sessions` collection) and survive page refreshes and server restarts.
 
 ### 5. GCP Firestore (vector store for Nutrition RAG)
 ```bash

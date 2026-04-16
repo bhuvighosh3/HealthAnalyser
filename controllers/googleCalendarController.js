@@ -146,7 +146,7 @@ exports.scheduleWorkouts = async (req, res) => {
         return res.status(400).json({ error: 'weeklyTrainingPlan is required.' });
     }
 
-    const email = getConnectedEmail(sessionId);
+    const email = await getConnectedEmail(sessionId);
 
     try {
         // Align to next Monday
