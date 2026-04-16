@@ -674,196 +674,167 @@ function initDownloadButton(plan, recommendations, hypothesis) {
 }
 
 // ===== GOOGLE CALENDAR SCHEDULING =====
-let _weeklyTrainingPlan = null; // set by renderForecastResults
-
-// ── Google Calendar connection helpers ────────────────────────────────────────
-let _gcalConnected = false;
-
-async function refreshGcalStatus() {
-    try {
-        const res  = await fetch('/api/auth/google-calendar/status', { credentials: 'same-origin' });
-        const data = await res.json();
-        _gcalConnected = !!data.connected;
-
-        const statusText   = document.getElementById('gcalStatusText');
-        const connectBtn   = document.getElementById('gcalConnectBtn');
-        const disconnectBtn= document.getElementById('gcalDisconnectBtn');
-        if (!statusText) return;
-
-        if (_gcalConnected) {
-            statusText.innerHTML   = `<span style="color:#4ade80">✓ Connected as ${data.email}</span>`;
-            connectBtn.style.display    = 'none';
-            disconnectBtn.style.display = 'inline';
-        } else {
-            statusText.textContent      = 'Connect your Google Calendar to schedule workouts.';
-            connectBtn.style.display    = 'inline-flex';
-            disconnectBtn.style.display = 'none';
-        }
-        lucide.createIcons();
-    } catch (_) {}
-}
+let _weeklyTrainingPlan = null;
 
 function initCalendarSection(plan) {
     _weeklyTrainingPlan = plan;
     const section = document.getElementById('calendarSection');
     if (!section) return;
     section.classList.remove('hidden');
-    refreshGcalStatus();
+    checkGcalStatus();
     lucide.createIcons();
 }
 
-// Connect button — opens Google OAuth in a popup
+// ── Check connection status ───────────────────────────────────────────────────
+async function checkGcalStatus() {
+    try {
+        const res  = await fetch('/api/auth/google-calendar/status', { credentials: 'same-origin' });
+        const data = await res.json();
+        updateGcalUI(data.connected, data.email);
+    } catch (_) {}
+}
+
+function updateGcalUI(connected, email) {
+    const notConn  = document.getElementById('gcalNotConnected');
+    const connArea = document.getElementById('gcalConnected');
+    const emailEl  = document.getElementById('gcalConnectedEmail');
+    const viewBtn  = document.getElementById('viewCalendarBtn');
+    const schedBtn = document.getElementById('scheduleBtn');
+
+    if (connected && email) {
+        notConn?.classList.add('hidden');
+        connArea?.classList.remove('hidden');
+        if (emailEl) emailEl.textContent = email;
+        if (viewBtn)  viewBtn.disabled  = false;
+        if (schedBtn) schedBtn.disabled = false;
+    } else {
+        notConn?.classList.remove('hidden');
+        connArea?.classList.add('hidden');
+        if (viewBtn)  viewBtn.disabled  = true;
+        if (schedBtn) schedBtn.disabled = true;
+    }
+    lucide.createIcons();
+}
+
+// ── Connect Google Calendar (opens popup) ────────────────────────────────────
 document.addEventListener('click', (e) => {
-    if (!e.target.closest('#gcalConnectBtn')) return;
-    const popup = window.open('/auth/google-calendar', 'gcal_auth', 'width=520,height=620');
-    const onMsg = async (ev) => {
-        if (ev.data?.type === 'GCAL_CONNECTED') {
-            window.removeEventListener('message', onMsg);
+    if (!e.target.closest('#connectGcalBtn')) return;
+    const popup = window.open('/auth/google-calendar', 'Connect Google Calendar', 'width=500,height=640,scrollbars=yes');
+    window.addEventListener('message', async (event) => {
+        if (event.data?.type === 'GCAL_CONNECTED') {
             if (popup && !popup.closed) popup.close();
-            await refreshGcalStatus();
+            updateGcalUI(true, event.data.email);
         }
-    };
-    window.addEventListener('message', onMsg);
+    }, { once: true });
+    // Poll in case popup was blocked
+    const poll = setInterval(async () => {
+        if (popup?.closed) { clearInterval(poll); await checkGcalStatus(); }
+    }, 1000);
 });
 
-// Disconnect button
+// ── Disconnect ────────────────────────────────────────────────────────────────
 document.addEventListener('click', async (e) => {
-    if (!e.target.closest('#gcalDisconnectBtn')) return;
+    if (!e.target.closest('#disconnectGcalBtn')) return;
     await fetch('/api/auth/google-calendar/disconnect', { method: 'POST', credentials: 'same-origin' });
-    await refreshGcalStatus();
+    updateGcalUI(false, null);
+    document.getElementById('upcomingResult')?.classList.add('hidden');
+    document.getElementById('scheduleResult')?.classList.add('hidden');
 });
 
-// ── Schedule: two-phase (preview → confirm) ────────────────────────────────
-let _scheduleMeta = null; // stores { durationWeeks, startDate } for the confirm step
-
+// ── View Upcoming Calendar Events ────────────────────────────────────────────
 document.addEventListener('click', async (e) => {
-    // ── Phase 1: "Schedule Workouts" → fetch preview ─────────────────────────
-    if (e.target.closest('#scheduleBtn')) {
-        const btn = e.target.closest('#scheduleBtn');
-        if (!_weeklyTrainingPlan || !_weeklyTrainingPlan.length) {
-            alert('No training plan found. Please run "Analyse My Goal" first.');
-            return;
-        }
+    const btn = e.target.closest('#viewCalendarBtn');
+    if (!btn) return;
 
-        const durationWeeks = parseInt(document.getElementById('calDurationWeeks')?.value) || 4;
-        const startDate     = document.getElementById('calStartDate')?.value || null;
-        _scheduleMeta = { durationWeeks, startDate };
+    btn.disabled = true;
+    const ogHtml = btn.innerHTML;
+    btn.innerHTML = '<i data-lucide="loader-2" class="analyse-btn-icon spin-icon"></i> Loading…';
+    lucide.createIcons();
 
-        btn.disabled = true;
-        const ogHtml = btn.innerHTML;
-        btn.innerHTML = '<i data-lucide="loader-2" class="analyse-btn-icon spin-icon"></i> Previewing…';
-        lucide.createIcons();
+    const loader = document.getElementById('upcomingLoader');
+    const result = document.getElementById('upcomingResult');
+    loader.classList.remove('hidden');
+    result.classList.add('hidden');
 
-        const preview  = document.getElementById('schedulePreview');
-        const loader   = document.getElementById('scheduleLoader');
-        const result   = document.getElementById('scheduleResult');
-        preview.classList.add('hidden');
+    try {
+        const res  = await fetch('/api/calendar/upcoming?days=14', { credentials: 'same-origin' });
+        const data = await res.json();
         loader.classList.add('hidden');
-        result.classList.add('hidden');
+        result.classList.remove('hidden');
 
-        try {
-            const res  = await fetch('/api/schedule', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ weeklyTrainingPlan: _weeklyTrainingPlan, durationWeeks, startDate, preview: true })
-            });
-            const data = await res.json();
-
-            if (data.error) {
-                result.classList.remove('hidden');
-                result.innerHTML = `<div class="analysis-error"><p>${data.error}</p></div>`;
-            } else {
-                // Render preview table grouped by week
-                const byWeek = {};
-                for (const ev of data.events) {
-                    (byWeek[ev.week] = byWeek[ev.week] || []).push(ev);
-                }
-                const INTENSITY_COLOR = { easy: '#4ade80', moderate: '#facc15', hard: '#f87171' };
-                let html = '';
-                for (const [week, evs] of Object.entries(byWeek)) {
-                    html += `<p style="font-weight:600;font-size:0.8rem;opacity:0.6;margin:0.75rem 0 0.4rem;text-transform:uppercase;letter-spacing:.05em">Week ${week}</p>`;
-                    html += '<div style="display:flex;flex-direction:column;gap:0.4rem">';
-                    for (const ev of evs) {
-                        const dot = `<span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${INTENSITY_COLOR[ev.intensity]||'#94a3b8'};margin-right:6px;flex-shrink:0"></span>`;
-                        html += `<div style="display:flex;align-items:flex-start;gap:0.5rem;padding:0.55rem 0.75rem;background:rgba(255,255,255,0.04);border-radius:8px;border:1px solid rgba(255,255,255,0.07)">
-                            <div style="min-width:90px;font-size:0.78rem;opacity:0.55">${ev.date}<br>${ev.startTime}–${ev.endTime}</div>
-                            <div style="flex:1;font-size:0.83rem">${dot}<strong>${ev.day}</strong> — ${ev.workout}</div>
-                            <div style="font-size:0.75rem;opacity:0.45;white-space:nowrap">${ev.duration}</div>
-                        </div>`;
-                    }
-                    html += '</div>';
-                }
-                document.getElementById('schedulePreviewTable').innerHTML = html;
-                preview.classList.remove('hidden');
-                lucide.createIcons();
-            }
-        } catch (err) {
-            result.classList.remove('hidden');
-            result.innerHTML = `<div class="analysis-error"><p>Preview failed: ${err.message}</p></div>`;
-        } finally {
-            btn.disabled = false;
-            btn.innerHTML = ogHtml;
-            lucide.createIcons();
+        if (data.error) {
+            result.innerHTML = `<div class="analysis-error"><p>${data.error}</p>${data.hint ? `<p style="margin-top:.4rem;opacity:.7;font-size:.82rem">${data.hint}</p>` : ''}</div>`;
+        } else if (!data.events || !data.events.trim()) {
+            result.innerHTML = `<div class="coach-note glass-panel"><p style="opacity:.7">No upcoming events in the next ${data.days} days.</p></div>`;
+        } else {
+            result.innerHTML = `<div class="coach-note glass-panel" style="white-space:pre-wrap;font-size:.85rem">
+                <p style="font-weight:600;margin-bottom:.6rem;opacity:.7;font-size:.78rem;text-transform:uppercase;letter-spacing:.05em">📅 Upcoming ${data.days} days · ${data.email}</p>
+                ${data.events}</div>`;
         }
-        return;
-    }
-
-    // ── Phase 2: "Confirm & Add to Calendar" → run the agent ─────────────────
-    if (e.target.closest('#scheduleConfirmBtn')) {
-        const confirmBtn = e.target.closest('#scheduleConfirmBtn');
-        const cancelBtn  = document.getElementById('scheduleCancelBtn');
-        const preview    = document.getElementById('schedulePreview');
-        const loader     = document.getElementById('scheduleLoader');
-        const result     = document.getElementById('scheduleResult');
-
-        confirmBtn.disabled = true;
-        cancelBtn.disabled  = true;
-        const ogHtml = confirmBtn.innerHTML;
-        confirmBtn.innerHTML = '<i data-lucide="loader-2" class="analyse-btn-icon spin-icon"></i> Adding to Calendar…';
+    } catch (err) {
+        document.getElementById('upcomingLoader').classList.add('hidden');
+        result.classList.remove('hidden');
+        result.innerHTML = `<div class="analysis-error"><p>Failed to load calendar: ${err.message}</p></div>`;
+    } finally {
+        btn.disabled = false;
+        btn.innerHTML = ogHtml;
         lucide.createIcons();
+    }
+});
 
-        loader.classList.remove('hidden');
-        result.classList.add('hidden');
+// ── Schedule Workouts into Calendar ──────────────────────────────────────────
+document.addEventListener('click', async (e) => {
+    const btn = e.target.closest('#scheduleBtn');
+    if (!btn) return;
 
-        const { durationWeeks, startDate } = _scheduleMeta || {};
-        try {
-            // Use new per-user OAuth endpoint if connected, else fall back to MCP-based
-            const res  = await fetch('/api/calendar/schedule', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                credentials: 'same-origin',
-                body: JSON.stringify({ weeklyTrainingPlan: _weeklyTrainingPlan, durationWeeks, startDate })
-            });
-            const data = await res.json();
-
-            loader.classList.add('hidden');
-            preview.classList.add('hidden');
-            result.classList.remove('hidden');
-
-            if (res.status === 401) {
-                result.innerHTML = `<div class="analysis-error"><p>Please connect your Google Calendar first.</p><p style="margin-top:.5rem;opacity:.7">Use the <strong>Connect Google Calendar</strong> button above, then try again.</p></div>`;
-                await refreshGcalStatus();
-            } else if (data.error) {
-                result.innerHTML = `<div class="analysis-error"><p>${data.error}</p>${data.hint ? `<p style="margin-top:.5rem;opacity:.7">${data.hint}</p>` : ''}</div>`;
-            } else {
-                result.innerHTML = `<div class="coach-note glass-panel" style="white-space:pre-wrap">${data.summary}</div>`;
-            }
-        } catch (err) {
-            loader.classList.add('hidden');
-            result.classList.remove('hidden');
-            result.innerHTML = `<div class="analysis-error"><p>Scheduling failed: ${err.message}</p></div>`;
-        } finally {
-            confirmBtn.disabled = false;
-            cancelBtn.disabled  = false;
-            confirmBtn.innerHTML = ogHtml;
-            lucide.createIcons();
-        }
+    if (!_weeklyTrainingPlan?.length) {
+        alert('No training plan found. Please run "Analyse My Goal" first.');
         return;
     }
 
-    // ── Cancel preview ────────────────────────────────────────────────────────
-    if (e.target.closest('#scheduleCancelBtn')) {
-        document.getElementById('schedulePreview').classList.add('hidden');
+    const durationWeeks = parseInt(document.getElementById('calDurationWeeks')?.value) || 4;
+    const startDate     = document.getElementById('calStartDate')?.value || null;
+
+    btn.disabled = true;
+    const ogHtml = btn.innerHTML;
+    btn.innerHTML = '<i data-lucide="loader-2" class="analyse-btn-icon spin-icon"></i> Scheduling…';
+    lucide.createIcons();
+
+    const loader = document.getElementById('scheduleLoader');
+    const result = document.getElementById('scheduleResult');
+    loader.classList.remove('hidden');
+    result.classList.add('hidden');
+
+    try {
+        const res  = await fetch('/api/calendar/schedule', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'same-origin',
+            body: JSON.stringify({ weeklyTrainingPlan: _weeklyTrainingPlan, durationWeeks, startDate }),
+        });
+        const data = await res.json();
+
+        loader.classList.add('hidden');
+        result.classList.remove('hidden');
+
+        if (res.status === 401) {
+            result.innerHTML = `<div class="analysis-error"><p>Please connect your Google Calendar first, then try again.</p></div>`;
+            updateGcalUI(false, null);
+        } else if (data.error) {
+            result.innerHTML = `<div class="analysis-error"><p>${data.error}</p>${data.hint ? `<p style="margin-top:.5rem;opacity:.7">${data.hint}</p>` : ''}</div>`;
+        } else {
+            result.innerHTML = `<div class="coach-note glass-panel" style="white-space:pre-wrap">
+                <p style="font-weight:600;margin-bottom:.6rem;color:var(--accent)">✅ Workouts Scheduled!</p>
+                ${data.summary}</div>`;
+        }
+    } catch (err) {
+        loader.classList.add('hidden');
+        result.classList.remove('hidden');
+        result.innerHTML = `<div class="analysis-error"><p>Scheduling failed: ${err.message}</p></div>`;
+    } finally {
+        btn.disabled = false;
+        btn.innerHTML = ogHtml;
+        lucide.createIcons();
     }
 });
 
