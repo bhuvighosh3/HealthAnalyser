@@ -234,6 +234,15 @@ async function initDatabase() {
     await runSQL(`CREATE INDEX IF NOT EXISTS idx_nv_category ON nutrition_vectors(goal_category)`);
     console.log('✅ nutrition_vectors table ready');
 
+    // ── Clear stale per-athlete data before repopulating ──────────────────────
+    // Without this, switching profiles leaves the previous athlete's activities
+    // in the table (different IDs so INSERT OR REPLACE won't remove them).
+    try {
+        await runSQL('DELETE FROM activities');
+        await runSQL('DELETE FROM athlete');
+        await runSQL('DELETE FROM run_stats');
+    } catch (_) {}
+
     // ── Populate from Strava ───────────────────────────────────────────────────
     try {
         if (!tokens.ACCESS_TOKEN) return;

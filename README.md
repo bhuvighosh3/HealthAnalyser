@@ -133,8 +133,8 @@ flowchart TD
 | Second data retrieval | ✅ | Google Search grounding (fitness chat) + Firecrawl search (nutrition RAG) |
 | Iterative refinement loop | ✅ | ADK `runAgent` event loop; EDA FunctionTool; Calendar MCPToolset multi-round |
 | RAG | ✅ | Firecrawl → Vertex AI embeddings → Firestore vector store → `findNearest` semantic search → Nutrition Agent |
-| Login / multi-account | ✅ | Login page with own-credentials mode and two sample profiles with real data |
-| Human-in-the-loop | ✅ | Calendar scheduling preview — proposed events shown for user approval before agent writes to Google Calendar |
+| Login / multi-account | ✅ | Login page with own-credentials mode and three sample profiles (Bhuvi, Rishit, Ritwik) with real data |
+| Human-in-the-loop | ✅ | Google Calendar scheduling — reads free slots, creates events in user's own calendar via per-user OAuth |
 
 ---
 
@@ -149,7 +149,7 @@ The app starts with a login screen (`/login.html`) offering two modes:
 | **Sample Profile 2 — Rishit** | Real Strava data — no setup needed. |
 | **Sample Profile 3 — Ritwik** | Real Strava data — no setup needed. |
 
-Session is stored in `localStorage`. A **Logout** button in the header clears the session and returns to login.
+Session is stored in `sessionStorage` (clears on browser/tab close — login required on every fresh session). A **Logout** button in the header clears the session and returns to login.
 
 ---
 
@@ -179,6 +179,30 @@ Before generating the plan the user can optionally enter:
 - **Dislikes** — foods to avoid entirely, not even as alternatives (e.g. `tofu, beets`)
 
 These are collected **after** the RAG retrieval runs (so they do not affect which chunks are retrieved) and injected into the agent instruction alongside the RAG context. The agent receives an explicit hard constraint: *never suggest allergenic foods; omit disliked foods entirely*.
+
+---
+
+## Google Calendar Scheduling
+
+```mermaid
+flowchart LR
+    USER([User]) -->|1. Pick start date & weeks| UI[Calendar Section]
+    UI -->|2. Connect Google Calendar| OAUTH[Google OAuth Popup]
+    OAUTH -->|3. User signs in with own Google account| GOOGLE[Google Consent Screen]
+    GOOGLE -->|4. Auth code| CB[/auth/google-calendar/callback]
+    CB -->|5. Store tokens in Firestore gcal_sessions| FS[(Firestore)]
+    UI -->|6. Schedule Workouts| API[POST /api/calendar/schedule]
+    API -->|7. Read existing events| GCAL[Google Calendar API]
+    GCAL -->|8. Busy times| API
+    API -->|9. Find free slots 6:30am · 5:30pm · 7am · 6pm| SLOTS[Slot finder]
+    SLOTS -->|10. Create events in free slots| GCAL
+    GCAL --> RESULT([Workouts added to user's calendar])
+```
+
+- Each user connects their **own** Google account — events go to their calendar, not the app owner's
+- Sessions stored in Firestore (`gcal_sessions`) — survive page refreshes and server restarts
+- Only schedules at reasonable hours: 6:30am, 5:30pm, 7:00am, 6:00pm — no odd night times
+- Reads existing events first to avoid double-booking
 
 ---
 
