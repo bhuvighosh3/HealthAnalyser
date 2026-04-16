@@ -5,13 +5,14 @@ function handleLogout() {
     window.location.href = '/login.html';
 }
 
-// Returns the profile key ('bhuvi', 'rishit', or '') from the stored login mode.
+// Returns the profile key ('bhuvi', 'rishit', 'ritwik', or '') from the stored login mode.
 // Sent as X-Profile header so the server uses the right Strava credentials
 // regardless of which Cloud Run instance handles the request.
 function getProfileKey() {
     const mode = sessionStorage.getItem('athleteiq_mode') || '';
     if (mode === 'sample_bhuvi')  return 'bhuvi';
     if (mode === 'sample_rishit') return 'rishit';
+    if (mode === 'sample_ritwik') return 'ritwik';
     return ''; // 'own' credentials — server uses tokens from /api/auth/configure
 }
 

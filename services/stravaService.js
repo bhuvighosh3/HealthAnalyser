@@ -36,16 +36,21 @@ const _builtinRishit = {
     CLIENT_SECRET: process.env.RISHIT_CLIENT_SECRET,
 };
 
-// If both profiles use the same CLIENT_ID + CLIENT_SECRET they are the same
-// Strava app/account. Point rishit at bhuvi's object so any token refresh
-// (which mutates the object in-place) is immediately visible to both profiles
-// and neither ends up holding an invalidated rotating refresh token.
-const _sameApp = _builtinRishit.CLIENT_ID     === _builtinBhuvi.CLIENT_ID &&
-                 _builtinRishit.CLIENT_SECRET  === _builtinBhuvi.CLIENT_SECRET;
+const _builtinRitwik = {
+    ACCESS_TOKEN:  process.env.RITWIK_ACCESS_TOKEN,
+    REFRESH_TOKEN: process.env.RITWIK_REFRESH_TOKEN,
+    EXPIRES_AT:    process.env.RITWIK_EXPIRES_AT,
+    CLIENT_ID:     process.env.RITWIK_CLIENT_ID,
+    CLIENT_SECRET: process.env.RITWIK_CLIENT_SECRET,
+};
 
+// Each profile is a fully independent object with its own tokens.
+// ensureValidProfileToken mutates these in-place on refresh and writes
+// back to the matching BHUVI_* / RISHIT_* / RITWIK_* env vars.
 const PROFILE_TOKENS = {
     bhuvi:  _builtinBhuvi,
-    rishit: _sameApp ? _builtinBhuvi : _builtinRishit,
+    rishit: _builtinRishit,
+    ritwik: _builtinRitwik,
 };
 
 function updateEnv(newTokens) {
@@ -137,7 +142,9 @@ async function ensureValidProfileToken(profileTokens) {
             profileTokens.EXPIRES_AT    = String(data.expires_at);
             // Determine prefix from CLIENT_ID so the right env var is written back
             const prefix = profileTokens.CLIENT_ID === process.env.RISHIT_CLIENT_ID
-                ? 'RISHIT' : 'BHUVI';
+                ? 'RISHIT'
+                : profileTokens.CLIENT_ID === process.env.RITWIK_CLIENT_ID
+                    ? 'RITWIK' : 'BHUVI';
             updateEnv({
                 [`${prefix}_ACCESS_TOKEN`]:  data.access_token,
                 [`${prefix}_REFRESH_TOKEN`]: data.refresh_token,
@@ -172,7 +179,7 @@ async function fetchFromStrava(endpoint) {
 }
 
 async function exchangeToken(code, profile) {
-    const creds = profile === 'rishit' ? PROFILE_TOKENS.rishit : tokens;
+    const creds = PROFILE_TOKENS[profile] || tokens;
     const res = await fetch('https://www.strava.com/oauth/token', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },

@@ -28,6 +28,14 @@ const SAMPLE_PROFILES = {
         CLIENT_ID:     process.env.RISHIT_CLIENT_ID,
         CLIENT_SECRET: process.env.RISHIT_CLIENT_SECRET,
     },
+    ritwik: {
+        name:   'Ritwik',
+        ACCESS_TOKEN:  process.env.RITWIK_ACCESS_TOKEN,
+        REFRESH_TOKEN: process.env.RITWIK_REFRESH_TOKEN,
+        EXPIRES_AT:    process.env.RITWIK_EXPIRES_AT,
+        CLIENT_ID:     process.env.RITWIK_CLIENT_ID,
+        CLIENT_SECRET: process.env.RITWIK_CLIENT_SECRET,
+    },
 };
 
 // ── GET /api/auth/profiles ────────────────────────────────────────────────────
@@ -75,11 +83,11 @@ exports.useSample = async (req, res) => {
     const key = (req.body?.profile || 'bhuvi').toLowerCase();
     const p   = SAMPLE_PROFILES[key];
 
-    if (!p) return res.status(400).json({ error: `Unknown profile "${key}". Use "bhuvi" or "rishit".` });
+    if (!p) return res.status(400).json({ error: `Unknown profile "${key}". Use "bhuvi", "rishit" or "ritwik".` });
     if (!p.ACCESS_TOKEN) return res.status(500).json({ error: `No credentials configured for "${key}".` });
 
     try {
-        const prefix = key === 'rishit' ? 'RISHIT' : 'BHUVI';
+        const prefix = { bhuvi: 'BHUVI', rishit: 'RISHIT', ritwik: 'RITWIK' }[key] || 'BHUVI';
         updateEnv({
             [`${prefix}_ACCESS_TOKEN`]:  p.ACCESS_TOKEN,
             [`${prefix}_REFRESH_TOKEN`]: p.REFRESH_TOKEN  || '',

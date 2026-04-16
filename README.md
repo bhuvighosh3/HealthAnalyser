@@ -145,8 +145,9 @@ The app starts with a login screen (`/login.html`) offering two modes:
 | Mode | Description |
 |---|---|
 | **My Account** | Enter your own Strava Client ID, Client Secret, Access Token, and Refresh Token. The server switches to your account live. |
-| **Sample Profile 1** | Real Strava data — no setup needed. |
-| **Sample Profile 2** | Real Strava data — no setup needed. |
+| **Sample Profile 1 — Bhuvi** | Real Strava data — no setup needed. |
+| **Sample Profile 2 — Rishit** | Real Strava data — no setup needed. |
+| **Sample Profile 3 — Ritwik** | Real Strava data — no setup needed. |
 
 Session is stored in `localStorage`. A **Logout** button in the header clears the session and returns to login.
 
@@ -251,6 +252,13 @@ RISHIT_ACCESS_TOKEN=
 RISHIT_REFRESH_TOKEN=
 RISHIT_EXPIRES_AT=
 
+# Sample Profile 3 — Ritwik's Strava account
+RITWIK_CLIENT_ID=...
+RITWIK_CLIENT_SECRET=...
+RITWIK_ACCESS_TOKEN=
+RITWIK_REFRESH_TOKEN=
+RITWIK_EXPIRES_AT=
+
 GCP_PROJECT_ID=your_gcp_project
 GCP_LOCATION=us-central1
 GOOGLE_OAUTH_CREDENTIALS=/absolute/path/to/gcp-oauth.keys.json  # optional (Calendar)
@@ -260,8 +268,9 @@ FIRECRAWL_API_KEY=fc-...                                          # for Nutritio
 ### 3. Strava OAuth
 ```bash
 npm start
-# Sample Profile 1: http://localhost:3000/auth
-# Sample Profile 2: http://localhost:3000/auth?profile=rishit
+# Sample Profile 1 (Bhuvi):  http://localhost:3000/auth
+# Sample Profile 2 (Rishit): http://localhost:3000/auth?profile=rishit
+# Sample Profile 3 (Ritwik): http://localhost:3000/auth?profile=ritwik
 ```
 
 ### 4. Google Calendar (per-user OAuth)

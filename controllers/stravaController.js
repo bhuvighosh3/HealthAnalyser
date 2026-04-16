@@ -1,20 +1,23 @@
 const { fetchFromStrava, exchangeToken } = require('../services/stravaService');
 const { storeActivities, RUN_TYPES } = require('../db/database');
 
+const CLIENT_ID_MAP = {
+    rishit: process.env.RISHIT_CLIENT_ID,
+    ritwik: process.env.RITWIK_CLIENT_ID,
+};
+
 exports.authorize = (req, res) => {
-    const profile = (req.query.profile || '').toLowerCase();
-    const clientId = profile === 'rishit'
-        ? process.env.RISHIT_CLIENT_ID
-        : process.env.BHUVI_CLIENT_ID;
-    const host = process.env.APP_URL || `http://${req.headers.host}`;
+    const profile   = (req.query.profile || '').toLowerCase();
+    const clientId  = CLIENT_ID_MAP[profile] || process.env.BHUVI_CLIENT_ID;
+    const host      = process.env.APP_URL || `http://${req.headers.host}`;
     const redirectUri = `${host}/exchange_token`;
-    const state = profile === 'rishit' ? '&state=rishit' : '';
-    const authUrl = `http://www.strava.com/oauth/authorize?client_id=${clientId}&response_type=code&redirect_uri=${encodeURIComponent(redirectUri)}&approval_prompt=force&scope=read,activity:read_all,profile:read_all${state}`;
+    const state     = profile ? `&state=${profile}` : '';
+    const authUrl   = `http://www.strava.com/oauth/authorize?client_id=${clientId}&response_type=code&redirect_uri=${encodeURIComponent(redirectUri)}&approval_prompt=force&scope=read,activity:read_all,profile:read_all${state}`;
     res.redirect(authUrl);
 };
 
 exports.exchangeToken = async (req, res) => {
-    const code = req.query.code;
+    const code    = req.query.code;
     const profile = (req.query.state || '').toLowerCase();
     if (!code) return res.send("Authorization failed!");
 
@@ -22,20 +25,21 @@ exports.exchangeToken = async (req, res) => {
         const tokenData = await exchangeToken(code, profile);
         if (tokenData.access_token) {
             const { updateEnv: updateTokens, PROFILE_TOKENS } = require('../services/stravaService');
+            const PREFIX = { rishit: 'RISHIT', ritwik: 'RITWIK' };
+            const prefix = PREFIX[profile];
 
-            if (profile === 'rishit') {
-                // Update Rishit's in-memory profile tokens
-                PROFILE_TOKENS.rishit.ACCESS_TOKEN  = tokenData.access_token;
-                PROFILE_TOKENS.rishit.REFRESH_TOKEN = tokenData.refresh_token;
-                PROFILE_TOKENS.rishit.EXPIRES_AT    = String(tokenData.expires_at);
-                // Persist to .env
+            if (prefix) {
+                // Update named profile in-memory and persist
+                PROFILE_TOKENS[profile].ACCESS_TOKEN  = tokenData.access_token;
+                PROFILE_TOKENS[profile].REFRESH_TOKEN = tokenData.refresh_token;
+                PROFILE_TOKENS[profile].EXPIRES_AT    = String(tokenData.expires_at);
                 updateTokens({
-                    RISHIT_ACCESS_TOKEN:  tokenData.access_token,
-                    RISHIT_REFRESH_TOKEN: tokenData.refresh_token,
-                    RISHIT_EXPIRES_AT:    tokenData.expires_at,
+                    [`${prefix}_ACCESS_TOKEN`]:  tokenData.access_token,
+                    [`${prefix}_REFRESH_TOKEN`]: tokenData.refresh_token,
+                    [`${prefix}_EXPIRES_AT`]:    tokenData.expires_at,
                 });
             } else {
-                // Re-init DB with new tokens
+                // Bhuvi / own account — re-init DB
                 const { initDatabase } = require('../db/database');
                 updateTokens({
                     BHUVI_ACCESS_TOKEN:  tokenData.access_token,
@@ -45,9 +49,10 @@ exports.exchangeToken = async (req, res) => {
                 await initDatabase();
             }
 
+            const name = profile ? (profile.charAt(0).toUpperCase() + profile.slice(1)) : 'your account';
             res.send(`
                 <h2>✅ Authentication Successful!</h2>
-                <p>Tokens saved for ${profile === 'rishit' ? 'Rishit' : 'your account'}. The server will auto-refresh them when they expire.</p>
+                <p>Tokens saved for ${name}. The server will auto-refresh them when they expire.</p>
                 <a href="/">Go back to your Dashboard</a>
             `);
         } else {
