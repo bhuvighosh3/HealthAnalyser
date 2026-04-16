@@ -659,7 +659,7 @@ let _gcalConnected = false;
 
 async function refreshGcalStatus() {
     try {
-        const res  = await fetch('/api/auth/google-calendar/status');
+        const res  = await fetch('/api/auth/google-calendar/status', { credentials: 'same-origin' });
         const data = await res.json();
         _gcalConnected = !!data.connected;
 
@@ -707,7 +707,7 @@ document.addEventListener('click', (e) => {
 // Disconnect button
 document.addEventListener('click', async (e) => {
     if (!e.target.closest('#gcalDisconnectBtn')) return;
-    await fetch('/api/auth/google-calendar/disconnect', { method: 'POST' });
+    await fetch('/api/auth/google-calendar/disconnect', { method: 'POST', credentials: 'same-origin' });
     await refreshGcalStatus();
 });
 
@@ -814,6 +814,7 @@ document.addEventListener('click', async (e) => {
             const res  = await fetch(endpoint, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
+                credentials: 'same-origin',
                 body: JSON.stringify({ weeklyTrainingPlan: _weeklyTrainingPlan, durationWeeks, startDate })
             });
             const data = await res.json();
