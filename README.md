@@ -6,6 +6,22 @@
 
 ---
 
+## Quickstart — No Setup Required
+
+Don't want to configure your own Strava account? Just use one of the three built-in sample profiles on the login screen. Each is connected to a real Strava account with live training data:
+
+| Profile | Description |
+|---|---|
+| **Bhuvi** | Real activity history — no setup needed |
+| **Rishit** | Real activity history — no setup needed |
+| **Ritwik** | Real activity history — no setup needed |
+
+All three profiles are connected in real time — activities, stats, and AI analysis reflect their actual Strava data.
+
+If you'd like to connect your **own** Strava account instead, see [Strava OAuth setup](#3-strava-oauth) in the Setup section below.
+
+---
+
 ## Collect → EDA → Hypothesize Pipeline
 
 ### Step 1: Collect
@@ -279,12 +295,36 @@ GOOGLE_REDIRECT_URI=https://<your-cloud-run-url>/auth/google-calendar/callback
 ```
 
 ### 3. Strava OAuth
+
+#### Getting Your Strava API Credentials (one-time setup)
+
+1. Go to [strava.com/settings/api](https://www.strava.com/settings/api)
+2. Click **Create an App** (or view your existing app)
+3. Fill in the form:
+   - **Application Name:** Anything you like (e.g. `My AthleteIQ`)
+   - **Category:** Choose any
+   - **Website:** Can be anything
+   - **Authorization Callback Domain:** `athleteiq-290375529887.us-central1.run.app`
+4. Note your **Client ID** and **Client Secret** — you'll need these below
+
+#### Connecting Your Strava Account
+
 ```bash
 npm start
 # Sample Profile 1 (Bhuvi):  http://localhost:3000/auth
 # Sample Profile 2 (Rishit): http://localhost:3000/auth?profile=rishit
 # Sample Profile 3 (Ritwik): http://localhost:3000/auth?profile=ritwik
 ```
+
+If you're connecting your own account via the **My Account** login mode:
+
+1. Open the app in your browser — you'll see the login screen
+2. Click **My Account** and enter your Strava **Client ID** and **Client Secret**
+3. Click **Continue to Strava** — you'll be redirected to Strava's authorization page
+4. Authorize the app on Strava's website
+5. You'll be returned to the app automatically — you're connected
+
+Your tokens are refreshed automatically on every server start (no re-auth needed after the first time).
 
 ### 4. Google Calendar (per-user OAuth)
 Create a **Web Application** OAuth 2.0 client in [Google Cloud Console → APIs & Services → Credentials](https://console.cloud.google.com/apis/credentials).
