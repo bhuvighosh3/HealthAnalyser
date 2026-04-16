@@ -626,24 +626,46 @@ function initDownloadButton(plan, recommendations, hypothesis) {
     if (!btn || !plan.length) return;
     btn.classList.remove('hidden');
     btn.onclick = () => {
-        const rows = [
-            ['Day', 'Workout', 'Duration', 'Intensity', 'Target HR', 'Purpose'],
-            ...plan.map(d => [d.day, d.workout, d.duration, d.intensity, d.targetHR || 'N/A', d.purpose])
-        ];
-        const milestones = (recommendations.milestones || []).map(m => `Week ${m.week}: ${m.target}`).join(' | ');
+        const q  = v => `"${String(v ?? '').replace(/"/g, '""')}"`;
+        const row = (...cells) => cells.map(q).join(',');
+        const blank = '';
         const targets = recommendations.weeklyTargets || {};
-        const header = [
-            `# AthleteIQ Training Plan`,
-            `Feasibility: ${hypothesis.feasibility} (${hypothesis.feasibilityScore}/100)`,
-            `Weekly Targets: ${targets.distanceKm} km | ${targets.kcal} kcal | ${targets.activeHours} hrs | Long run: ${targets.longRunKm} km`,
-            `Milestones: ${milestones}`,
-            `Coach Note: ${recommendations.coachNote || ''}`,
-            ''
-        ].join('\n');
-        const csv = header + rows.map(r => r.map(c => `"${String(c).replace(/"/g, '""')}"`).join(',')).join('\n');
-        const blob = new Blob([csv], { type: 'text/csv' });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
+
+        const sections = [
+
+            // ── SECTION 1: Plan Summary ───────────────────────────────────────
+            row('PLAN SUMMARY', ''),
+            row('Field', 'Value'),
+            row('Feasibility', `${hypothesis.feasibility} (${hypothesis.feasibilityScore}/100)`),
+            row('Summary', hypothesis.summary || ''),
+            row('Coach Note', recommendations.coachNote || ''),
+            blank,
+
+            // ── SECTION 2: Weekly Targets ─────────────────────────────────────
+            row('WEEKLY TARGETS', ''),
+            row('Metric', 'Target'),
+            row('Distance (km)',     targets.distanceKm    ?? 'N/A'),
+            row('Calories (kcal)',   targets.kcal          ?? 'N/A'),
+            row('Active Hours (hrs)',targets.activeHours   ?? 'N/A'),
+            row('Long Run (km)',     targets.longRunKm     ?? 'N/A'),
+            blank,
+
+            // ── SECTION 3: Weekly Training Plan ──────────────────────────────
+            row('WEEKLY TRAINING PLAN', ''),
+            row('Day', 'Workout', 'Duration', 'Intensity', 'Target HR', 'Purpose'),
+            ...plan.map(d => row(d.day, d.workout, d.duration, d.intensity, d.targetHR || 'N/A', d.purpose)),
+            blank,
+
+            // ── SECTION 4: Milestones ─────────────────────────────────────────
+            row('MILESTONES', ''),
+            row('Week', 'Target'),
+            ...(recommendations.milestones || []).map(m => row(`Week ${m.week}`, m.target)),
+        ];
+
+        const csv  = sections.join('\n');
+        const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' });
+        const url  = URL.createObjectURL(blob);
+        const a    = document.createElement('a');
         a.href = url; a.download = 'athleteiq-training-plan.csv';
         a.click();
         URL.revokeObjectURL(url);
