@@ -212,6 +212,8 @@ These are collected **after** the RAG retrieval runs (so they do not affect whic
 - Only schedules at reasonable hours: 6:30am, 5:30pm, 7:00am, 6:00pm — no odd night times
 - Reads existing events first to avoid double-booking
 
+> **Connecting your Google account:** When you click **Connect Google Calendar**, Google may show an "App isn't verified" warning screen. Click **Advanced** at the bottom of that screen, then click **Go to AthleteIQ (unsafe)** to proceed. This is expected for apps that haven't gone through Google's verification process — your data is only used to schedule workouts into your own calendar.
+
 ---
 
 ## Chat Intent Routing
