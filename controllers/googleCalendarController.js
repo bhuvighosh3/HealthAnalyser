@@ -204,9 +204,22 @@ exports.scheduleWorkouts = async (req, res) => {
                     { hour: 18, minute: 0 },
                 ];
 
+                // Naive datetime formatter — no timezone suffix so Google Calendar
+                // uses the user's own calendar timezone instead of converting from UTC
+                const fmt = (h, m, extraMin = 0) => {
+                    const totalMin = h * 60 + m + extraMin;
+                    const hh = Math.floor(totalMin / 60) % 24;
+                    const mm = totalMin % 60;
+                    return `${dateStr}T${String(hh).padStart(2,'0')}:${String(mm).padStart(2,'0')}:00`;
+                };
+
                 let scheduled = false;
                 for (const slot of slots) {
-                    const startDT = new Date(`${dateStr}T${String(slot.hour).padStart(2,'0')}:${String(slot.minute).padStart(2,'0')}:00`);
+                    const startStr = fmt(slot.hour, slot.minute);
+                    const endStr   = fmt(slot.hour, slot.minute, durationMin);
+
+                    // For conflict detection use real Date objects (busyTimes are UTC ISO strings)
+                    const startDT = new Date(`${dateStr}T${String(slot.hour).padStart(2,'0')}:${String(slot.minute).padStart(2,'0')}:00Z`);
                     const endDT   = new Date(startDT.getTime() + durationMin * 60 * 1000);
 
                     const conflict = busyTimes.some(b => {
@@ -217,8 +230,8 @@ exports.scheduleWorkouts = async (req, res) => {
                     if (!conflict) {
                         await createEvent(sessionId, {
                             summary: title, description,
-                            startDateTime: startDT.toISOString(),
-                            endDateTime:   endDT.toISOString(),
+                            startDateTime: startStr,
+                            endDateTime:   endStr,
                         });
                         created.push({
                             date: dateStr,
@@ -261,9 +274,10 @@ exports.addWorkout = async (req, res) => {
         return res.status(400).json({ error: 'title, date, and startTime are required.' });
     }
     try {
-        const startDT = new Date(`${date}T${startTime}:00`);
-        const endDT   = new Date(startDT.getTime() + durationMinutes * 60 * 1000);
-        await createEvent(sessionId, { summary: title, description, startDateTime: startDT.toISOString(), endDateTime: endDT.toISOString() });
+        const [h, m]   = startTime.split(':').map(Number);
+        const endMin   = h * 60 + m + durationMinutes;
+        const endStr   = `${date}T${String(Math.floor(endMin/60)%24).padStart(2,'0')}:${String(endMin%60).padStart(2,'0')}:00`;
+        await createEvent(sessionId, { summary: title, description, startDateTime: `${date}T${startTime}:00`, endDateTime: endStr });
         res.json({ result: `✅ "${title}" added on ${date} at ${startTime}.` });
     } catch (err) {
         res.status(500).json({ error: 'Failed to add workout: ' + err.message });
