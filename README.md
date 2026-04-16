@@ -57,10 +57,10 @@ graph TD
     StravaAPI["Strava REST API"]
     StravaMCP["Strava MCP Server\n(ADK MCPToolset)"]
     GeminiAI["Gemini 2.5 Flash\n(Vertex AI)"]
-    CalMCP["Google Calendar MCP\n(ADK MCPToolset)"]
-    CalAPI["Google Calendar API"]
+    CalAPI["Google Calendar API\n(googleapis)"]
+    FSCal["Firestore\ngcal_sessions"]
     SQLite["SQLite DB\n(health_data.db)"]
-    Firestore["Firestore Vector Store\n(nutrition_vectors)"]
+    FSNut["Firestore\nnutrition_vectors"]
     Firecrawl["Firecrawl Search API\n(nutrition RAG)"]
     VertexEmbed["Vertex AI\ntext-embedding-004"]
 
@@ -70,14 +70,14 @@ graph TD
     StravaMCP -->|OAuth Bearer| StravaAPI
     Server -->|ADK LlmAgent + GOOGLE_SEARCH| GeminiAI
     Server -->|ADK FunctionTool| GeminiAI
-    Server -->|ADK LlmAgent + MCPToolset| CalMCP
-    CalMCP -->|OAuth2| CalAPI
+    Server -->|per-user OAuth tokens| FSCal
+    FSCal -->|read/write events| CalAPI
     Server -->|read/write| SQLite
     Server -->|search + scrape| Firecrawl
     Firecrawl -->|markdown chunks| Server
     Server -->|embed chunks| VertexEmbed
-    VertexEmbed -->|768-dim vectors| Firestore
-    Firestore -->|findNearest COSINE| Server
+    VertexEmbed -->|768-dim vectors| FSNut
+    FSNut -->|findNearest COSINE| Server
 ```
 
 ---
@@ -105,8 +105,7 @@ flowchart TD
     OUT -->|user presses button| NUT
     NUT --> NUTOUT[Personalised nutrition plan\ngrounded in authoritative sources]
 
-    OUT -->|user presses Schedule| PREVIEW[Human-in-the-loop\nPreview proposed events\ndate · time · intensity]
-    PREVIEW -->|user confirms| CAL{Calendar Scheduling\nGoogle Calendar API\nreads free slots · writes events}
+    OUT -->|user picks start date\n+ connects Google Calendar| CAL{Calendar Scheduling\nGoogle Calendar API\nreads free slots · writes events}
     CAL --> CALEVENTS[Workouts scheduled in\nuser's own Google Calendar]
 ```
 
@@ -119,7 +118,7 @@ flowchart TD
 |---|---|---|
 | Frontend | ✅ | `public/index.html`, `public/app.js` |
 | Agent framework | ✅ | **Google ADK** (`@google/adk`) — `LlmAgent`, `FunctionTool`, `MCPToolset`, `GOOGLE_SEARCH` |
-| Tool calling | ✅ | `compute_training_metrics` FunctionTool (EDA), Strava MCPToolset, Calendar MCPToolset |
+| Tool calling | ✅ | `compute_training_metrics` FunctionTool (EDA), Strava MCPToolset (chat), Google Calendar API (scheduling) |
 | Non-trivial dataset | ✅ | Strava activities API — real training history, fetched at runtime |
 | Multi-agent pattern | ✅ | EDA → Hypothesis → Recommendation (3-agent handoff) + separate Nutrition RAG Agent |
 | Deployed | ✅ | Google Cloud Run — https://athleteiq-290375529887.us-central1.run.app |
@@ -240,7 +239,7 @@ sequenceDiagram
     Strava-->>Server: access_token + refresh_token + expires_at
     Server->>Server: Persist tokens to .env
 
-    Note over Server: On every API call (both profiles)
+    Note over Server: On every API call (all three profiles)
     Server->>Server: ensureValidToken() / ensureValidProfileToken()
     alt token expires within 1 hour
         Server->>Strava: POST /oauth/token (refresh)
@@ -285,8 +284,13 @@ RITWIK_EXPIRES_AT=
 
 GCP_PROJECT_ID=your_gcp_project
 GCP_LOCATION=us-central1
-GOOGLE_OAUTH_CREDENTIALS=/absolute/path/to/gcp-oauth.keys.json  # optional (Calendar)
 FIRECRAWL_API_KEY=fc-...                                          # for Nutrition RAG
+APP_URL=https://<your-cloud-run-url>                              # fixes redirect URI on Cloud Run
+
+# Google Calendar (per-user OAuth — Web Application client)
+GOOGLE_CLIENT_ID=...
+GOOGLE_CLIENT_SECRET=...
+GOOGLE_REDIRECT_URI=https://<your-cloud-run-url>/auth/google-calendar/callback
 ```
 
 ### 3. Strava OAuth
@@ -346,7 +350,7 @@ npm start  # http://localhost:3000
 | AI / Agents | **Google ADK** (`@google/adk` v0.6.1) — `LlmAgent`, `FunctionTool`, `MCPToolset`, `GOOGLE_SEARCH` |
 | Model | Gemini 2.5 Flash via Vertex AI |
 | Strava data | Strava REST API + `@r-huijts/strava-mcp-server` (ADK MCPToolset) |
-| Calendar | `@cocal/google-calendar-mcp` (ADK MCPToolset) |
+| Calendar | `googleapis` — direct Google Calendar API v3 with per-user OAuth2 (sessions in Firestore) |
 | Nutrition RAG | Firecrawl `/search` → Vertex AI `text-embedding-004` → Firestore vector store → `findNearest` COSINE search |
 | Vector DB | Google Firestore (`nutrition_vectors` collection, 768-dim vectors) |
 | Database | SQLite (`sqlite3`) — activity cache |
