@@ -80,24 +80,24 @@ exports.callback = async (req, res) => {
 };
 
 // ── GET /auth/google-calendar/status ─────────────────────────────────────────
-exports.status = (req, res) => {
+exports.status = async (req, res) => {
     const sessionId = req.cookies?.gcal_session;
-    const connected = sessionId ? isConnected(sessionId) : false;
-    const email     = sessionId ? getConnectedEmail(sessionId) : null;
+    const connected = await isConnected(sessionId);
+    const email     = connected ? await getConnectedEmail(sessionId) : null;
     res.json({ connected, email });
 };
 
 // ── POST /auth/google-calendar/disconnect ─────────────────────────────────────
-exports.disconnectCalendar = (req, res) => {
+exports.disconnectCalendar = async (req, res) => {
     const sessionId = req.cookies?.gcal_session;
-    if (sessionId) disconnect(sessionId);
+    if (sessionId) await disconnect(sessionId);
     res.json({ ok: true });
 };
 
 // ── GET /api/calendar/upcoming ───────────────────────────────────────────────
 exports.upcomingEvents = async (req, res) => {
     const sessionId = req.cookies?.gcal_session;
-    if (!sessionId || !isConnected(sessionId)) {
+    if (!sessionId || !(await isConnected(sessionId))) {
         return res.status(401).json({ error: 'Google Calendar not connected.', hint: 'Click "Connect Google Calendar" first.' });
     }
     const days = parseInt(req.query.days) || 14;
@@ -137,7 +137,7 @@ exports.upcomingEvents = async (req, res) => {
 // ── POST /api/calendar/schedule ──────────────────────────────────────────────
 exports.scheduleWorkouts = async (req, res) => {
     const sessionId = req.cookies?.gcal_session;
-    if (!sessionId || !isConnected(sessionId)) {
+    if (!sessionId || !(await isConnected(sessionId))) {
         return res.status(401).json({ error: 'Google Calendar not connected.', hint: 'Click "Connect Google Calendar" first.' });
     }
 
@@ -253,7 +253,7 @@ exports.scheduleWorkouts = async (req, res) => {
 // ── POST /api/calendar/add-workout ───────────────────────────────────────────
 exports.addWorkout = async (req, res) => {
     const sessionId = req.cookies?.gcal_session;
-    if (!sessionId || !isConnected(sessionId)) {
+    if (!sessionId || !(await isConnected(sessionId))) {
         return res.status(401).json({ error: 'Google Calendar not connected.' });
     }
     const { title, date, startTime, durationMinutes = 60, description = '' } = req.body;

@@ -1,20 +1,18 @@
 /**
  * Google Calendar OAuth Service
  *
- * Manages per-user Google OAuth tokens stored in SQLite.
- * Each user authenticates with their own Google account —
- * tokens are stored and refreshed independently per user session.
+ * Manages per-user Google OAuth tokens stored in Firestore so they survive
+ * Cloud Run instance restarts and page refreshes.
  */
 
-const { google } = require('googleapis');
+const { google }    = require('googleapis');
+const { Firestore } = require('@google-cloud/firestore');
 
-// In-memory token store keyed by sessionId
-// { [sessionId]: { access_token, refresh_token, expiry_date, email } }
-const tokenStore = new Map();
+const db         = new Firestore({ projectId: process.env.GCP_PROJECT_ID || 'healthmonitor-493021' });
+const COLLECTION = 'gcal_sessions';
 
-/**
- * Build an OAuth2 client using environment credentials.
- */
+// ── OAuth client ──────────────────────────────────────────────────────────────
+
 function makeOAuthClient() {
     const clientId     = process.env.GOOGLE_CLIENT_ID;
     const clientSecret = process.env.GOOGLE_CLIENT_SECRET;
@@ -30,37 +28,46 @@ function makeOAuthClient() {
     return new google.auth.OAuth2(clientId, clientSecret, redirectUri);
 }
 
-/**
- * Generate the Google OAuth consent URL for a given session.
- */
+// ── Firestore helpers ─────────────────────────────────────────────────────────
+
+async function saveSession(sessionId, data) {
+    await db.collection(COLLECTION).doc(sessionId).set({ ...data, updatedAt: new Date() });
+}
+
+async function loadSession(sessionId) {
+    const doc = await db.collection(COLLECTION).doc(sessionId).get();
+    return doc.exists ? doc.data() : null;
+}
+
+async function deleteSession(sessionId) {
+    await db.collection(COLLECTION).doc(sessionId).delete();
+}
+
+// ── Public API ────────────────────────────────────────────────────────────────
+
 function getAuthUrl(sessionId) {
     const oauth2Client = makeOAuthClient();
     return oauth2Client.generateAuthUrl({
         access_type: 'offline',
-        prompt:      'consent',   // always get a refresh token
+        prompt:      'consent',
         scope: [
             'https://www.googleapis.com/auth/calendar',
             'https://www.googleapis.com/auth/userinfo.email',
         ],
-        state: sessionId,         // passed back in callback so we know which session
+        state: sessionId,
     });
 }
 
-/**
- * Exchange an auth code for tokens and store them for this session.
- * Returns the user's email address.
- */
 async function handleCallback(code, sessionId) {
-    const oauth2Client = makeOAuthClient();
-    const { tokens }   = await oauth2Client.getToken(code);
+    const oauth2Client   = makeOAuthClient();
+    const { tokens }     = await oauth2Client.getToken(code);
     oauth2Client.setCredentials(tokens);
 
-    // Fetch the user's email
     const oauth2 = google.oauth2({ version: 'v2', auth: oauth2Client });
     const { data } = await oauth2.userinfo.get();
     const email = data.email;
 
-    tokenStore.set(sessionId, {
+    await saveSession(sessionId, {
         access_token:  tokens.access_token,
         refresh_token: tokens.refresh_token,
         expiry_date:   tokens.expiry_date,
@@ -71,15 +78,9 @@ async function handleCallback(code, sessionId) {
     return email;
 }
 
-/**
- * Get a ready-to-use authenticated Google Calendar client for a session.
- * Automatically refreshes expired tokens.
- */
 async function getCalendarClient(sessionId) {
-    const stored = tokenStore.get(sessionId);
-    if (!stored) {
-        throw new Error('NOT_CONNECTED');
-    }
+    const stored = await loadSession(sessionId);
+    if (!stored) throw new Error('NOT_CONNECTED');
 
     const oauth2Client = makeOAuthClient();
     oauth2Client.setCredentials({
@@ -88,12 +89,12 @@ async function getCalendarClient(sessionId) {
         expiry_date:   stored.expiry_date,
     });
 
-    // Auto-refresh if expired
-    oauth2Client.on('tokens', (newTokens) => {
+    // Persist refreshed tokens back to Firestore
+    oauth2Client.on('tokens', async (newTokens) => {
         if (newTokens.access_token) {
             stored.access_token = newTokens.access_token;
             if (newTokens.expiry_date) stored.expiry_date = newTokens.expiry_date;
-            tokenStore.set(sessionId, stored);
+            await saveSession(sessionId, stored);
             console.log(`🔄 Google token auto-refreshed for ${stored.email}`);
         }
     });
@@ -101,30 +102,22 @@ async function getCalendarClient(sessionId) {
     return { client: oauth2Client, email: stored.email };
 }
 
-/**
- * Check if a session has a connected Google Calendar.
- */
-function isConnected(sessionId) {
-    return tokenStore.has(sessionId);
+async function isConnected(sessionId) {
+    if (!sessionId) return false;
+    const stored = await loadSession(sessionId);
+    return !!stored;
 }
 
-/**
- * Get the connected email for a session (or null).
- */
-function getConnectedEmail(sessionId) {
-    return tokenStore.get(sessionId)?.email || null;
+async function getConnectedEmail(sessionId) {
+    if (!sessionId) return null;
+    const stored = await loadSession(sessionId);
+    return stored?.email || null;
 }
 
-/**
- * Disconnect a session's Google Calendar.
- */
-function disconnect(sessionId) {
-    tokenStore.delete(sessionId);
+async function disconnect(sessionId) {
+    if (sessionId) await deleteSession(sessionId);
 }
 
-/**
- * Fetch upcoming events directly via Google Calendar API (no MCP needed).
- */
 async function fetchUpcomingEvents(sessionId, days = 14) {
     const { client, email } = await getCalendarClient(sessionId);
     const calendar = google.calendar({ version: 'v3', auth: client });
@@ -142,13 +135,9 @@ async function fetchUpcomingEvents(sessionId, days = 14) {
         maxResults:   50,
     });
 
-    const events = response.data.items || [];
-    return { events, email };
+    return { events: response.data.items || [], email };
 }
 
-/**
- * Create a single calendar event via Google Calendar API.
- */
 async function createEvent(sessionId, { summary, description, startDateTime, endDateTime }) {
     const { client } = await getCalendarClient(sessionId);
     const calendar   = google.calendar({ version: 'v3', auth: client });
@@ -158,8 +147,8 @@ async function createEvent(sessionId, { summary, description, startDateTime, end
         resource: {
             summary,
             description,
-            start: { dateTime: startDateTime, timeZone: 'America/New_York' },
-            end:   { dateTime: endDateTime,   timeZone: 'America/New_York' },
+            start: { dateTime: startDateTime },
+            end:   { dateTime: endDateTime },
         },
     });
 
