@@ -18,7 +18,15 @@ Don't want to configure your own Strava account? Just use one of the three built
 
 All three profiles are connected in real time — activities, stats, and AI analysis reflect their actual Strava data.
 
-If you'd like to connect your **own** Strava account instead, see [Strava OAuth setup](#3-strava-oauth) in the Setup section below.
+If you'd like to connect your **own** Strava account instead:
+
+1. Go to [strava.com/settings/api](https://www.strava.com/settings/api) and create a free API app
+   - **Authorization Callback Domain:** `athleteiq-290375529887.us-central1.run.app`
+   - Note your **Client ID** and **Client Secret**
+2. Open the app and click **My Account** on the login screen
+3. Enter your Client ID and Client Secret, then click **Continue to Strava**
+4. Authorize the app on Strava's website
+5. You'll be returned to the app automatically — you're connected
 
 ---
 
