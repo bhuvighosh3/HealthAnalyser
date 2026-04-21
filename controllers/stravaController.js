@@ -12,7 +12,7 @@ exports.authorize = (req, res) => {
     const host      = process.env.APP_URL || `http://${req.headers.host}`;
     const redirectUri = `${host}/exchange_token`;
     const state     = profile ? `&state=${profile}` : '';
-    const authUrl   = `http://www.strava.com/oauth/authorize?client_id=${clientId}&response_type=code&redirect_uri=${encodeURIComponent(redirectUri)}&approval_prompt=force&scope=read,activity:read_all,profile:read_all${state}`;
+    const authUrl   = `http://www.strava.com/oauth/authorize?client_id=${clientId}&response_type=code&redirect_uri=${encodeURIComponent(redirectUri)}&approval_prompt=auto&scope=read,read_all,activity:read_all,profile:read_all${state}`;
     res.redirect(authUrl);
 };
 
@@ -24,7 +24,7 @@ exports.exchangeToken = async (req, res) => {
     try {
         const tokenData = await exchangeToken(code, profile);
         if (tokenData.access_token) {
-            const { updateEnv: updateTokens, PROFILE_TOKENS } = require('../services/stravaService');
+            const { updateEnv: updateTokens, PROFILE_TOKENS, saveProfileTokensToFirestore } = require('../services/stravaService');
             const PREFIX = { rishit: 'RISHIT', ritwik: 'RITWIK' };
             const prefix = PREFIX[profile];
 
@@ -38,6 +38,8 @@ exports.exchangeToken = async (req, res) => {
                     [`${prefix}_REFRESH_TOKEN`]: tokenData.refresh_token,
                     [`${prefix}_EXPIRES_AT`]:    tokenData.expires_at,
                 });
+                // Persist to Firestore so new Cloud Run instances get the latest scoped token
+                await saveProfileTokensToFirestore(profile, PROFILE_TOKENS[profile]);
             } else {
                 // Bhuvi / own account — re-init DB
                 const { initDatabase } = require('../db/database');

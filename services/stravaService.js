@@ -1,6 +1,36 @@
 const fs = require('fs');
 const { AsyncLocalStorage } = require('async_hooks');
 const { resetMcpClient } = require('./mcpService');
+const { Firestore } = require('@google-cloud/firestore');
+
+// ── Firestore token persistence ───────────────────────────────────────────────
+// Persists profile tokens so Cloud Run instances always get the latest tokens
+// even after rotation or re-auth (mirrors how Google Calendar tokens work).
+const _firestoreDb = new Firestore({ projectId: process.env.GCP_PROJECT_ID || 'healthmonitor-493021' });
+const STRAVA_TOKEN_COLLECTION = 'strava_profile_tokens';
+
+async function saveProfileTokensToFirestore(profileKey, tokenData) {
+    try {
+        await _firestoreDb.collection(STRAVA_TOKEN_COLLECTION).doc(profileKey).set({
+            ACCESS_TOKEN:  tokenData.ACCESS_TOKEN,
+            REFRESH_TOKEN: tokenData.REFRESH_TOKEN,
+            EXPIRES_AT:    tokenData.EXPIRES_AT,
+            updatedAt:     new Date(),
+        });
+    } catch (e) {
+        console.warn(`[Strava/Firestore] Failed to save tokens for ${profileKey}:`, e.message);
+    }
+}
+
+async function loadProfileTokensFromFirestore(profileKey) {
+    try {
+        const doc = await _firestoreDb.collection(STRAVA_TOKEN_COLLECTION).doc(profileKey).get();
+        return doc.exists ? doc.data() : null;
+    } catch (e) {
+        console.warn(`[Strava/Firestore] Failed to load tokens for ${profileKey}:`, e.message);
+        return null;
+    }
+}
 
 // ── Global token store (mutated on profile switch / token refresh) ─────────────
 const tokens = {
@@ -150,6 +180,9 @@ async function ensureValidProfileToken(profileTokens) {
                 [`${prefix}_REFRESH_TOKEN`]: data.refresh_token,
                 [`${prefix}_EXPIRES_AT`]:    data.expires_at,
             });
+            // Persist to Firestore so new Cloud Run instances get the rotated token
+            const profileKey = prefix.toLowerCase();
+            saveProfileTokensToFirestore(profileKey, profileTokens);
             console.log(`✅ Profile token refreshed (${prefix}) — expires in ${data.expires_in}s`);
         } else {
             console.error('Profile token refresh failed:', data);
@@ -193,6 +226,24 @@ async function exchangeToken(code, profile) {
     return res.json();
 }
 
+// Called once at startup: pull the latest tokens from Firestore into PROFILE_TOKENS
+// so Cloud Run cold-starts always have the most recently rotated tokens.
+async function warmProfileTokensFromFirestore() {
+    for (const [key, profileTokens] of Object.entries(PROFILE_TOKENS)) {
+        const stored = await loadProfileTokensFromFirestore(key);
+        if (!stored) continue;
+        // Only apply if Firestore has a newer or longer-lived token
+        const storedExpiry  = parseInt(stored.EXPIRES_AT)  || 0;
+        const currentExpiry = parseInt(profileTokens.EXPIRES_AT) || 0;
+        if (storedExpiry > currentExpiry) {
+            profileTokens.ACCESS_TOKEN  = stored.ACCESS_TOKEN;
+            profileTokens.REFRESH_TOKEN = stored.REFRESH_TOKEN;
+            profileTokens.EXPIRES_AT    = stored.EXPIRES_AT;
+            console.log(`🔄 Loaded fresher ${key} token from Firestore (expires ${new Date(storedExpiry * 1000).toISOString()})`);
+        }
+    }
+}
+
 module.exports = {
     tokens,
     updateEnv,
@@ -201,4 +252,7 @@ module.exports = {
     exchangeToken,
     requestTokenStore,
     PROFILE_TOKENS,
+    ensureValidProfileToken,
+    warmProfileTokensFromFirestore,
+    saveProfileTokensToFirestore,
 };

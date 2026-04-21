@@ -4,7 +4,7 @@ const cors         = require('cors');
 const cookieParser = require('cookie-parser');
 const { initDatabase } = require('./db/database');
 const { authorize, exchangeToken } = require('./controllers/stravaController');
-const { requestTokenStore, PROFILE_TOKENS } = require('./services/stravaService');
+const { requestTokenStore, PROFILE_TOKENS, ensureValidProfileToken, warmProfileTokensFromFirestore } = require('./services/stravaService');
 const googleCalendarController = require('./controllers/googleCalendarController');
 const apiRoutes = require('./routes/apiRoutes');
 
@@ -42,6 +42,16 @@ app.use('/api', apiRoutes);
 
 app.listen(PORT, async () => {
     console.log(`Server is running on http://localhost:${PORT}`);
+    // 1. Pull the latest rotated tokens from Firestore (beats env vars on cold starts)
+    await warmProfileTokensFromFirestore();
+    // 2. Refresh any profile token expiring within the hour (all three profiles)
+    await Promise.allSettled(
+        Object.entries(PROFILE_TOKENS).map(([name, t]) =>
+            ensureValidProfileToken(t).catch(e =>
+                console.warn(`[Startup] Token pre-warm failed for ${name}:`, e.message)
+            )
+        )
+    );
     // Initialize Database
     await initDatabase();
 });
