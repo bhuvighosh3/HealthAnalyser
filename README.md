@@ -1,6 +1,6 @@
 # AthleteIQ
 
-> AI-powered Strava health analyser — collects real training data, performs statistical EDA, hypothesises goal feasibility, delivers personalised training plans, and generates RAG-grounded nutrition guidance via a dedicated agent. Powered by Google ADK (Gemini 2.5 Flash + Vertex AI).
+> AI-powered Strava health analyser — collects real training data, performs deterministic statistical EDA, hypothesises goal feasibility, delivers personalised training plans, and generates RAG-grounded nutrition guidance via a dedicated agent. Powered by Google ADK (Gemini 2.5 Flash + Vertex AI).
 
 **Live:** https://athleteiq-290375529887.us-central1.run.app
 
@@ -43,9 +43,9 @@ At runtime, the agent fetches from the Strava REST API:
 Data is real, live, and non-trivial (full athlete training history). It is also enriched server-side with MET-based calorie estimates per activity type.
 
 ### Step 2: Explore and Analyse (EDA)
-**File:** `controllers/forecastController.js` — **EDA Agent** section, `computeTrainingMetrics()` function
+**File:** `controllers/forecastController.js` — `computeTrainingMetrics()` function
 
-A dedicated **EDA Agent** (`LlmAgent` via Google ADK) calls the `compute_training_metrics` `FunctionTool` which executes deterministic statistical computations over the collected Strava data:
+`computeTrainingMetrics('all', activities)` runs deterministic statistical computations directly over the collected Strava data — no LLM agent in this step. The results are formatted into a structured markdown summary and passed as grounded context to the Hypothesis Agent.
 
 | Metric | What it computes |
 |---|---|
@@ -53,8 +53,6 @@ A dedicated **EDA Agent** (`LlmAgent` via Google ADK) calls the `compute_trainin
 | `volume_trend` | Weekly distance aggregation, avg vs recent volume, peak week, 6-week breakdown |
 | `consistency` | Weeks active in last 4, avg days between runs, longest gap, consistency % |
 | `training_load` | Avg session duration, avg run distance, avg HR, avg suffer score |
-
-The ADK agent calls the tool with `metric='all'`, receives the computed JSON, and writes a natural-language EDA report citing the specific numbers. This EDA summary is passed as grounded context to the Hypothesis Agent.
 
 ### Step 3: Hypothesize
 **File:** `controllers/forecastController.js` — **Hypothesis Check Agent** section
@@ -112,10 +110,8 @@ graph TD
 flowchart TD
     COLLECT([Step 1: Collect\nStrava REST API\n50 activities + stats]) --> EDA
 
-    EDA{EDA Agent\nADK LlmAgent\nGemini 2.5 Flash}
-    EDA -->|ADK FunctionTool call| TOOL[Statistical Computation\npace_trend · volume_trend\nconsistency · training_load]
-    TOOL -->|computed JSON| EDA
-    EDA -->|EDA summary text| HYP
+    EDA[EDA: computeTrainingMetrics\nDeterministic\npace_trend · volume_trend\nconsistency · training_load]
+    EDA -->|formatted EDA summary| HYP
 
     HYP{Hypothesis Agent\nGemini 2.5 Flash}
     HYP -->|structured JSON handoff| REC
@@ -142,9 +138,9 @@ flowchart TD
 |---|---|---|
 | Frontend | ✅ | `public/index.html`, `public/app.js` |
 | Agent framework | ✅ | **Google ADK** (`@google/adk`) — `LlmAgent`, `FunctionTool`, `MCPToolset`, `GOOGLE_SEARCH` |
-| Tool calling | ✅ | `compute_training_metrics` FunctionTool (EDA), Strava MCPToolset (chat), Google Calendar API (scheduling) |
+| Tool calling | ✅ | Strava MCPToolset (chat), Google Calendar API (scheduling) |
 | Non-trivial dataset | ✅ | Strava activities API — real training history, fetched at runtime |
-| Multi-agent pattern | ✅ | EDA → Hypothesis → Recommendation (3-agent handoff) + separate Nutrition RAG Agent |
+| Multi-agent pattern | ✅ | EDA (deterministic) → Hypothesis → Recommendation (pipeline handoff) + separate Nutrition RAG Agent |
 | Deployed | ✅ | Google Cloud Run — https://athleteiq-290375529887.us-central1.run.app |
 | README | ✅ | This file |
 
@@ -154,7 +150,7 @@ flowchart TD
 | Structured output | ✅ | Hypothesis JSON + Recommendation JSON with strict schemas |
 | Data visualization | ✅ | Chart.js — distance, pace, weekly volume, HR zones, efficiency |
 | Second data retrieval | ✅ | Google Search grounding (fitness chat) + Firecrawl search (nutrition RAG) |
-| Iterative refinement loop | ✅ | ADK `runAgent` event loop; EDA FunctionTool; Calendar MCPToolset multi-round |
+| Iterative refinement loop | ✅ | ADK `runAgent` event loop (chat/nutrition); Calendar MCPToolset multi-round |
 | RAG | ✅ | Firecrawl → Vertex AI embeddings → Firestore vector store → `findNearest` semantic search → Nutrition Agent |
 | Login / multi-account | ✅ | Login page with own-credentials mode and three sample profiles (Bhuvi, Rishit, Ritwik) with real data |
 | Human-in-the-loop | ✅ | Google Calendar scheduling — reads free slots, creates events in user's own calendar via per-user OAuth |
