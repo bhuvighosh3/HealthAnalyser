@@ -1,6 +1,5 @@
 const { generateText } = require('../services/aiService');
 const { fetchFromStrava } = require('../services/stravaService');
-const { runAgent, FunctionTool, LlmAgent, MODEL } = require('../services/adkService');
 
 // MET values (metabolic equivalent) per activity type
 // Calories burned = MET × weight_kg × duration_hours
@@ -192,63 +191,45 @@ exports.forecast = async (req, res) => {
         const weeklySummary = { weeklyKcal, weeklyDistKm, weeklyHours, weeklyActs, estimatedVO2, bmi };
 
         // ════════════════════════════════════════════════════════════════════════
-        // AGENT 1 — EDA Agent  (ADK LlmAgent + FunctionTool)
+        // STEP 1 — EDA (deterministic — no LLM agent needed)
         // ════════════════════════════════════════════════════════════════════════
-        const edaSystem = `You are a sports data analyst performing Exploratory Data Analysis (EDA) on an athlete's Strava training history.
-Use the compute_training_metrics tool to statistically analyse the training data. Call it with metric='all' to get the full picture.
-After receiving the computed metrics, write a concise EDA report.
+        const edaMetrics = computeTrainingMetrics('all', activities);
+        console.log('[EDA] Metrics computed directly');
 
-FORMATTING RULES — follow these exactly:
-- Use ## for section headings (e.g. ## Pace Trend)
-- Use **bold** only for key numbers and labels
-- Use bullet points (- item) for lists
-- Do NOT use #### or deeper heading levels
-- Do NOT use raw asterisks for emphasis inside sentences
+        const pt = edaMetrics.pace_trend;
+        const vt = edaMetrics.volume_trend;
+        const cs = edaMetrics.consistency;
+        const tl = edaMetrics.training_load;
 
-Structure your report as:
-## Key Trends
-## Consistency Patterns
-## Training Load
-## Anomalies & Risk Signals
+        const edaSummary = [
+            '## Key Trends',
+            pt ? (pt.note
+                ? `- Pace data: ${pt.note} (${pt.sample_size} runs)`
+                : `- Avg pace **${pt.avg_min_per_km} min/km** — ${pt.direction} (slope ${pt.trend_per_activity_min} min/activity over ${pt.sample_size} runs)`
+            ) : '',
+            vt ? `- Weekly volume **${vt.avg_weekly_km} km/wk** avg | recent **${vt.recent_weekly_km} km/wk** | peak **${vt.peak_weekly_km} km/wk** — ${vt.trend}` : '',
+            '',
+            '## Consistency Patterns',
+            cs ? [
+                `- **${cs.runs_last_4_weeks} runs** in the last 4 weeks across **${cs.weeks_active}/4 weeks** active`,
+                `- Consistency score: **${cs.consistency_score_pct}%** | avg **${cs.avg_runs_per_week} runs/wk**`,
+                cs.avg_days_between_runs != null ? `- Avg gap between runs: **${cs.avg_days_between_runs} days** | longest gap: **${cs.longest_gap_days} days**` : '',
+            ].filter(Boolean).join('\n') : 'Insufficient data',
+            '',
+            '## Training Load',
+            tl ? [
+                `- Avg session: **${tl.avg_session_min} min** | avg run: **${tl.avg_run_km} km**`,
+                tl.avg_heart_rate_bpm ? `- Avg HR: **${tl.avg_heart_rate_bpm} bpm** | avg suffer score: **${tl.avg_suffer_score ?? 'N/A'}**` : '- No heart rate data available',
+            ].join('\n') : 'Insufficient data',
+            '',
+            '## Anomalies & Risk Signals',
+            cs && cs.longest_gap_days > 7 ? `- Long gap of **${cs.longest_gap_days} days** detected — possible injury or rest block` : '',
+            vt && vt.trend === 'increasing' && vt.recent_weekly_km > vt.avg_weekly_km * 1.3 ? `- Volume spike: recent week **${vt.recent_weekly_km} km** vs avg **${vt.avg_weekly_km} km** — monitor for overtraining` : '',
+            pt && pt.direction && pt.direction.includes('regressing') ? `- Pace is regressing — review training intensity` : '',
+            (!cs || cs.consistency_score_pct < 50) ? '- Low consistency score — irregular training pattern' : '',
+        ].filter(s => s !== '').join('\n');
 
-Be specific — cite actual numbers from the tool results.`;
-
-        const edaUserMsg = `Analyse this athlete's training data.
-Goal: "${goal}" | Timeline: ${durationWeeks} weeks | Weight: ${weight} kg | Age: ${age}
-${context ? `Context: ${context}` : ''}
-Compute all available metrics and produce a statistical EDA summary.`;
-
-        // FunctionTool captures 'activities' from the enclosing scope
-        const edaTool = new FunctionTool({
-            name:        'compute_training_metrics',
-            description: 'Statistically analyse the athlete\'s Strava training data. Returns computed metrics for pace trends (linear regression), volume trends, consistency patterns, and training load.',
-            parameters: {
-                type: 'OBJECT',
-                properties: {
-                    metric: {
-                        type:        'STRING',
-                        enum:        ['pace_trend', 'volume_trend', 'consistency', 'training_load', 'all'],
-                        description: 'Which aspect of training data to compute statistics for.',
-                    }
-                },
-                required: ['metric'],
-            },
-            execute: async ({ metric }) => {
-                const result = computeTrainingMetrics(metric || 'all', activities);
-                console.log(`[EDA] Tool executed: metric=${metric}`);
-                return result;
-            },
-        });
-
-        const edaAgent = new LlmAgent({
-            name:        'eda_agent',
-            model:       MODEL,
-            instruction: edaSystem,
-            tools:       [edaTool],
-        });
-
-        const edaSummary = await runAgent(edaAgent, edaUserMsg);
-        console.log(`[EDA] Summary ready (${edaSummary.length} chars)`);
+        console.log(`[EDA] Summary formatted (${edaSummary.length} chars)`);
 
         // ════════════════════════════════════════════════════════════════════════
         // AGENT 2 — Hypothesis Check Agent  (structured JSON via generateText)
